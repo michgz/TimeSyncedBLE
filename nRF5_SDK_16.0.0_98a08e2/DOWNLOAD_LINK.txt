@@ -1,0 +1,3 @@
+Fill with SDK 16.0.0 contents as downloaded from:
+
+https://www.nordicsemi.com/Software-and-tools/Software/nRF5-SDK/Download
