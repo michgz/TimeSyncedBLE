@@ -1,53 +1,15 @@
 /**
- * Copyright (c) 2014 - 2019, Nordic Semiconductor ASA
- *
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice, this
- *    list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form, except as embedded into a Nordic
- *    Semiconductor ASA integrated circuit in a product or a software update for
- *    such product, must reproduce the above copyright notice, this list of
- *    conditions and the following disclaimer in the documentation and/or other
- *    materials provided with the distribution.
- *
- * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
- *    contributors may be used to endorse or promote products derived from this
- *    software without specific prior written permission.
- *
- * 4. This software, with or without modification, must only be used with a
- *    Nordic Semiconductor ASA integrated circuit.
- *
- * 5. Any software provided in binary form under this license must not be reverse
- *    engineered, decompiled, modified and/or disassembled.
- *
- * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
- * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
- * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL NORDIC SEMICONDUCTOR ASA OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
- * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
  */
 /** @file
  *
- * @defgroup ble_sdk_uart_over_ble_main main.c
+ * @defgroup main.c
  * @{
- * @ingroup  ble_sdk_app_nus_eval
- * @brief    UART over BLE application main file.
+ * @}
+ * @ingroup  
+ * @brief    
  *
- * This file contains the source code for a sample application that uses the Nordic UART service.
- * This application uses the @ref srvlib_conn_params module.
+ * This file contains the source code for a sample application.
  */
-
 
 #include <stdint.h>
 #include <string.h>
@@ -59,6 +21,9 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "timers.h"
+#ifdef FREERTOS
+    #include "nrf_sdh_freertos.h"
+#endif
 #include "bsp.h"
 #include "nrf_drv_clock.h"
 #include "sdk_errors.h"
@@ -69,28 +34,17 @@
 #include "peer_manager.h"
 #include "peer_manager_handler.h"
 #include "app_timer.h"
-#include "bsp_btn_ble.h"
 #include "ble.h"
 #include "ble_advdata.h"
 #include "ble_advertising.h"
 #include "ble_conn_params.h"
 #include "ble_db_discovery.h"
-#include "ble_hrs.h"
-#include "ble_rscs.h"
-#include "ble_hrs_c.h"
-#include "ble_rscs_c.h"
 #include "ble_conn_state.h"
-#include "nrf_fstorage.h"
-#include "fds.h"
-#ifdef CENTRAL
-#include "ble_nus_c.h"
-#endif
+//#include "nrf_fstorage.h"
+//#include "fds.h"
 #include "nrf_ble_gatt.h"
 #include "nrf_ble_qwr.h"
 #include "app_timer.h"
-#if defined PERIPHERAL || defined CENTRAL
-#include "ble_nus.h"
-#endif
 #include "nrf_pwr_mgmt.h"
 #include "nrf_drv_timer.h"
 #include "nrf_ble_scan.h"
@@ -106,7 +60,6 @@
 #include "nrf_ppi.h"
 #include "ServiceConfig.h"
 #include "ServiceDebug.h"
-#include "NordicUart.h"
 #include "TimedCircBuffer.h"
 #include "ScanList.h"
 #include "BroadcastAdvertising.h"
@@ -123,14 +76,13 @@
 #define CENTRAL_CONNECTED_LED           -1
 
 // AMT related LEDs
-#define READY_LED -1
-#define PROGRESS_LED  -1
-#define DONE_LED -1
+#define READY_LED                       -1
+#define PROGRESS_LED                    -1
+#define DONE_LED                        -1
 
 
-#define CENTRAL_DEVICE_NAME             "nRF Relay\0"                                 /**< Name of device used for advertising. */
+#define CENTRAL_DEVICE_NAME             "nRF Relay\0"                               /**< Name of device used for advertising. */
 #define PERIPHERAL_DEVICE_NAME          "nRF_Node"
-#define MANUFACTURER_NAME               "NordicSemiconductor"                       /**< Manufacturer. Passed to Device Information Service. */
 #define AMTS_SERVICE_UUID_TYPE          BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
 
 #define APP_ADV_INTERVAL                MSEC_TO_UNITS(500, UNIT_1_25_MS)             /**< The advertising interval (in units of 0.625 ms). This value corresponds to 187.5 ms. */
@@ -159,35 +111,36 @@
 #define SEC_PARAM_MIN_KEY_SIZE          7                                           /**< Minimum encryption key size in octets. */
 #define SEC_PARAM_MAX_KEY_SIZE          16                                          /**< Maximum encryption key size in octets. */
 
-#define HART_RATE_SERVICE_UUID_IDX      0                                           /**< Hart Rate service UUID index in array. */
-#define RSCS_SERVICE_UUID_IDX           1                                           /**< RSCS service UUID index in array. */
-
 /**@brief   Priority of the application BLE event handler.
  * @note    You shouldn't need to modify this value.
  */
 #define APP_BLE_OBSERVER_PRIO           3
 
-#define DB_DISCOVERY_INSTANCE_CNT       2  /**< Number of DB Discovery instances. */
+#define DB_DISCOVERY_INSTANCE_CNT       1                                           /**< Number of DB Discovery instances. */
 
-NRF_BLE_GQ_DEF(m_ble_gatt_queue,                                    /**< BLE GATT Queue instance. */
+NRF_BLE_GQ_DEF(m_ble_gatt_queue,                                                    /**< BLE GATT Queue instance. */
                NRF_SDH_BLE_CENTRAL_LINK_COUNT,
                NRF_BLE_GQ_QUEUE_SIZE);
-NRF_BLE_GATT_DEF(m_gatt);                                              /**< GATT module instance. */
-NRF_BLE_QWRS_DEF(m_qwr, NRF_SDH_BLE_TOTAL_LINK_COUNT);                 /**< Context for the Queued Write module.*/
-BLE_ADVERTISING_DEF(m_advertising);                                    /**< Advertising module instance. */
-//#ifdef CENTRAL
-BLE_DB_DISCOVERY_ARRAY_DEF(m_db_discovery, 1);                         /**< Database discovery module instances. */
-//#endif
+NRF_BLE_GATT_DEF(m_gatt);                                                           /**< GATT module instance. */
+NRF_BLE_SCAN_DEF(m_scan);                                                           /**< Scanning Module instance. */
+NRF_BLE_QWRS_DEF(m_qwr,                                                             /**< Context for the Queued Write module.*/
+               NRF_SDH_BLE_TOTAL_LINK_COUNT);    
+BLE_ADVERTISING_DEF(m_advertising);                                                 /**< Advertising module instance. */
+BLE_DB_DISCOVERY_ARRAY_DEF(m_db_discovery,                                          /**< Database discovery module instances. */
+                                DB_DISCOVERY_INSTANCE_CNT);
 
 //BLE_DBG_DEF(m_dbg);
 
 static uint16_t   m_conn_handle          = BLE_CONN_HANDLE_INVALID;                 /**< Handle of the current peripheral-role connection. */
 
+/**@brief   Definition of the application timers used.
+ */
 APP_TIMER_DEF(m_sync_timer);
 APP_TIMER_DEF(m_sleep_timer);
 APP_TIMER_DEF(m_scan_timer);
 APP_TIMER_DEF(notif_timeout);
 APP_TIMER_DEF(m_reading_timer);
+APP_TIMER_DEF(led_flash_timer);
 
 #define SLEEP_TIMEOUT    0            /**< Timeout for peripheral to wait before sleeping -- currently 0 to indicate no timeout. */
 
@@ -195,21 +148,25 @@ APP_TIMER_DEF(m_reading_timer);
 
 static void notif_timeout_handler(void * p_context);
 static void scan_timer_timeout_handler(void * p_context);
+static void do_time_sync(void);
 
-//NRF_BLE_GATT_DEF(m_gatt);                                               /**< GATT module instance. */
-//BLE_DB_DISCOVERY_DEF(m_db_disc);                                        /**< Database discovery module instance. */
-NRF_BLE_SCAN_DEF(m_scan);                                               /**< Scanning Module instance. */
 //NRF_BLE_GQ_DEF(m_ble_gatt_queue,                                        /**< BLE GATT Queue instance. */
 //               NRF_SDH_BLE_CENTRAL_LINK_COUNT,
 //               NRF_BLE_GQ_QUEUE_SIZE);
 //static uint16_t m_ble_nus_max_data_len = BLE_GATT_ATT_MTU_DEFAULT - OPCODE_LENGTH - HANDLE_LENGTH; /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Nordic UART service module. */
 //                        ^----------------   never used ???
 
-/**@brief NUS UUID. */
+/**@brief AMT Service UUID. */
 static ble_uuid_t const m_scan_uuid =
 {
     .uuid = AMT_SERVICE_UUID,
     .type = AMTS_SERVICE_UUID_TYPE
+};
+
+/**@brief UUIDs to advertise. */
+static ble_uuid_t m_adv_uuids[] =
+{
+    {AMT_SERVICE_UUID,        AMTS_SERVICE_UUID_TYPE}
 };
 
 
@@ -217,15 +174,6 @@ static ble_uuid_t const m_scan_uuid =
  *  If these are set to empty strings, the UUIDs defined below are used.
  */
 static char const m_target_periph_name[] = "";
-
-/**@brief UUIDs that the central application scans for if the name above is set to an empty string,
- * and that are to be advertised by the peripherals.
- */
-/*static ble_uuid_t m_adv_uuids[] =
-{
-    {BLE_UUID_HEART_RATE_SERVICE,        BLE_UUID_TYPE_BLE},
-    {BLE_UUID_RUNNING_SPEED_AND_CADENCE, BLE_UUID_TYPE_BLE}
-};*/
 
 
 static ble_gap_scan_params_t m_scan_param =                 /**< Scan parameters requested for scanning and connection. */
@@ -252,15 +200,6 @@ static ble_gap_scan_params_t m_scan_param_peripheral =                 /**< Scan
 };
 
 static void scan_start (void);
-
-#ifdef PERIPHERAL
-
-static ble_uuid_t m_adv_uuids[] =
-{
-    {AMT_SERVICE_UUID,        AMTS_SERVICE_UUID_TYPE}
-};
-
-#endif
 
 #ifdef PERIPHERAL
 //    static bool isPeripheral(void) {return false;}
@@ -338,9 +277,6 @@ static void on_sleep_timer_timeout(void * p_context)
         do_sleep();
     }
 }
-
-
-APP_TIMER_DEF(led_flash_timer);
 
 static void flash_led(void)
 {
@@ -505,35 +441,21 @@ static void services_init(void)
     uint32_t           err_code;
     nrf_ble_qwr_init_t qwr_init = {0};
 
-    // TODO: unify these
-#ifdef PERIPHERAL
     // Initialize Queued Write Module.
     qwr_init.error_handler = nrf_qwr_error_handler;
 
     err_code = nrf_ble_qwr_init(&m_qwr[0], &qwr_init);
     APP_ERROR_CHECK(err_code);
-#else
-    // Initialize Queued Write module instances.
-    qwr_init.error_handler = nrf_qwr_error_handler;
-
-    for (uint32_t i = 0; i < NRF_SDH_BLE_TOTAL_LINK_COUNT; i++)
-    {
-        err_code = nrf_ble_qwr_init(&m_qwr[i], &qwr_init);
-        APP_ERROR_CHECK(err_code);
-    }
-#endif
-
-    // Initialize NUS.
-    nus_init();
 
     //err_code = ble_debug_service_init(&m_dbg);
     //APP_ERROR_CHECK(err_code);
 
-    // Initialise AMTS
+    // Initialise AMTS service
     nrf_ble_amts_init(&m_amts, amts_evt_handler);
 
     if (isCentral())
     {
+        // Initialise the ATMC service.
         nrf_ble_amtc_init_t amtc_init;
 
         memset(&amtc_init, 0, sizeof(amtc_init));
@@ -641,35 +563,9 @@ static void service_error_handler(uint32_t nrf_error)
     APP_ERROR_HANDLER(nrf_error);
 }
 
-#if 0
-static unsigned int leaf_read_ptr;
-
-bool UploadLeaf(app_fifo_t * const p_fifo)
-{
-    if (leaf_read_ptr == 0)
-    {
-        uint32_t len;
-        len = 2*sizeof(uint32_t);
-        app_fifo_write(p_fifo, (void *)(uint32_t [2]){0x80000021, leaf_list_ptr*sizeof(LEAF_T)}, &len);
-        len = leaf_list_ptr*sizeof(LEAF_T);
-        app_fifo_write(p_fifo, (void*)leaf_list, &len);
-        
-        leaf_read_ptr = 1;
-        return (len > 0);
-    }
-    return false;
-}
-
-static void upload_leaf_list(void)
-{
-    leaf_read_ptr = 0U;
-    StartSending(&UploadLeaf);
-}
-#endif
-
 static void check_manu_data(char const * x, int len)
 {
-    // Do something
+    // Check if manufacturer data meets the expected format.
     if (len >= 6)
     {
         ble_advdata_manuf_data_t const * manu = (ble_advdata_manuf_data_t const *) x;
@@ -735,7 +631,16 @@ static bool trigger_from_scan_timer_timeout(void)
 /** Returns true if scan started.   */
 static bool scan_from_scan_timer_timeout(void)
 {
-    scan_start();
+    if (isCentral() && m_conn_handle != BLE_CONN_HANDLE_INVALID)
+    {
+        // If not connected, time syncs are aligned with advertising timeouts. When
+        // connected there is not that route, so we must do here.
+        do_time_sync();
+    }
+    else
+    {
+        scan_start();
+    }
     return true;
 }
 
@@ -1050,12 +955,43 @@ static void on_sync_timer_timeout(void * p_context)
         NRF_LOG_INFO("Stopping sync beacon\r\n");
     }
 
-    // New fast advertising timeout in units of 10ms. I think it's okay to just
-    // write in a new value like this.
-    m_advertising.adv_modes_config.ble_adv_fast_timeout = APP_ADV_DURATION;
+    if (isCentral() && m_conn_handle != BLE_CONN_HANDLE_INVALID && m_advertising.adv_mode_current == BLE_ADV_MODE_IDLE)
+    {
+        scan_start();
+    }
+    else
+    {
+        // New fast advertising timeout in units of 10ms. I think it's okay to just
+        // write in a new value like this.
+        m_advertising.adv_modes_config.ble_adv_fast_timeout = APP_ADV_DURATION;
 
-    // Restart advertising and scanning
-    adv_scan_start();
+        // Restart advertising and scanning
+        adv_scan_start();
+    }
+}
+
+static void do_time_sync(void)
+{
+    ret_code_t err_code;
+
+    if (isCentral() && isUseSyncTimer())
+    {
+        nrf_ble_scan_stop();
+
+        err_code = ts_tx_start(200);
+        APP_ERROR_CHECK(err_code);
+
+        NRF_LOG_INFO("Starting sync beacon transmission!\r\n");
+
+        err_code = app_timer_start(m_sync_timer, 5000, (void *)0 );
+        APP_ERROR_CHECK(err_code);
+    }
+    else
+    {
+        // The peripheral doesn't need to send a sync here. Just call the callback immediately
+        // to re-start advertising
+        on_sync_timer_timeout((void *)0 );
+    }
 }
 
 
@@ -1078,24 +1014,8 @@ static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
             // Advertising has timed out. Stop scanning as well and give a time sync. After that, can start
             // advertising and scanning again.
 
-            if (isCentral() && isUseSyncTimer())
-            {
-                nrf_ble_scan_stop();
+            do_time_sync();
 
-                err_code = ts_tx_start(200);
-                APP_ERROR_CHECK(err_code);
-
-                NRF_LOG_INFO("Starting sync beacon transmission!\r\n");
-
-                err_code = app_timer_start(m_sync_timer, 5000, (void *)0 );
-                APP_ERROR_CHECK(err_code);
-            }
-            else
-            {
-                // The peripheral doesn't need to send a sync here. Just call the callback immediately
-                // to re-start advertising
-                on_sync_timer_timeout((void *)0 );
-            }
         } break;
 
         default:
@@ -1224,8 +1144,6 @@ static bool shutdown_handler(nrf_pwr_mgmt_evt_t event)
     {
         case NRF_PWR_MGMT_EVT_PREPARE_WAKEUP:
             // Prepare wakeup buttons.
-            //err_code = bsp_btn_ble_sleep_mode_prepare();
-            //APP_ERROR_CHECK(err_code);
             break;
 
         default:
@@ -1569,7 +1487,7 @@ static void notif_timeout_handler(void * p_context)
                 {
                     // Get the ble_addr_t to summ[1:2]
                 }
-                nus_queue_tx_data((uint8_t *) summ, sizeof(summ));
+                amts_queue_tx_data((uint8_t *) summ, sizeof(summ));
             }
 
             ret_code_t err_code = sd_ble_gap_disconnect(p_amt_c->conn_handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
@@ -1624,7 +1542,7 @@ static void amtc_evt_handler(nrf_ble_amtc_t * p_amt_c, nrf_ble_amtc_evt_t * p_ev
                 notif_time = 2;
 
             // Relay on
-            nus_queue_tx_data(p_evt->params.hvx.data, p_evt->params.hvx.notif_len);
+            amts_queue_tx_data(p_evt->params.hvx.data, p_evt->params.hvx.notif_len);
 
 #if 0
             static uint32_t bytes_cnt  = 0;
@@ -1778,12 +1696,7 @@ static void delete_bonds(void)
 /**@brief Function for handling events from the GATT library. */
 void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const * p_evt)
 {
-//#ifdef PERIPHERAL
-//    if ((m_conn_handle == p_evt->conn_handle) && (p_evt->evt_id == NRF_BLE_GATT_EVT_ATT_MTU_UPDATED))
-//#endif
-//#ifdef CENTRAL
     if (p_evt->evt_id == NRF_BLE_GATT_EVT_ATT_MTU_UPDATED)
-//#endif
     {
         //m_ble_nus_max_data_len = p_evt->params.att_mtu_effective - OPCODE_LENGTH - HANDLE_LENGTH;
         //NRF_LOG_INFO("Data len is set to 0x%X(%d)", m_ble_nus_max_data_len, m_ble_nus_max_data_len);
@@ -1850,10 +1763,6 @@ static void buttons_leds_init(bool * p_erase_bonds)
     uint32_t err_code = bsp_init(BSP_INIT_NONE   /*| BSP_INIT_LEDS*/ /*| BSP_INIT_BUTTONS*/, bsp_event_handler);
     APP_ERROR_CHECK(err_code);
 
-//    err_code = bsp_btn_ble_init(NULL, &startup_event);
-//    APP_ERROR_CHECK(err_code);
-
-//    *p_erase_bonds = (startup_event == BSP_EVENT_CLEAR_BONDING_DATA);
     *p_erase_bonds = false;
 }
 
@@ -1911,6 +1820,8 @@ static void idle_state_handle(void)
     }
 }
 
+/**@brief Set up the time sync functionality (both transmit & receive).
+ */
 static void sync_timer_init(void)
 {
     uint32_t       err_code;
@@ -1960,7 +1871,7 @@ static void sync_timer_init(void)
     APP_ERROR_CHECK(err_code);
     
     NRF_LOG_INFO("Started listening for beacons.\r\n");
-    NRF_LOG_INFO("Press Button 1 to start sending sync beacons\r\n");
+    NRF_LOG_INFO("Call ts_tx_start() to start sending sync beacons\r\n");
 }
 
 
@@ -1987,21 +1898,22 @@ static void main_task_function (void * pvParameter)
     nrf_gpio_pin_set(SEN_ENABLE); // accelerometer power off
     nrf_delay_ms(450);   // give time to reset
 
-#if 0
-    if (isPeripheral())
+    if (!isTestDevice())
     {
-        nrf_gpio_pin_clear(SEN_ENABLE); // accelerometer power on
+        if (isPeripheral())
+        {
+            nrf_gpio_pin_clear(SEN_ENABLE); // accelerometer power on
 
-        // Now do the self-test
-        nrf_delay_us(250);
+            // Now do the self-test
+            nrf_delay_us(250);
 
-        sensor_init();
+            sensor_init();
 
-        gpio_init();
+            gpio_init();
 
-      //  read_regs(LIS2DH_OUT_X_L);
+          //  read_regs(LIS2DH_OUT_X_L);
+        }
     }
-#endif
 
     //Configure all leds on board.
     bsp_board_init(BSP_INIT_LEDS);
@@ -2038,8 +1950,6 @@ static void main_task_function (void * pvParameter)
     APP_ERROR_CHECK(err_code);
 
     // Start execution.
-    NRF_LOG_INFO("Relay example started.");
-
     if (erase_bonds == true)
     {
         // Scanning and advertising is done upon PM_EVT_PEERS_DELETE_SUCCEEDED event.
@@ -2056,8 +1966,6 @@ static void main_task_function (void * pvParameter)
         idle_state_handle();
     }
 }
-
-//#include "nrf_sdh_freertos.h"
 
 
 /** @
@@ -2090,16 +1998,22 @@ int main(void)
     /* Activate deep sleep mode */
     SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
 
-#if 0
+#ifdef FREERTOS
+
     // Create a FreeRTOS task for the BLE stack.
     // The task will run advertising_start() before entering its loop.
     nrf_sdh_freertos_init(main_task_function, 0);
 
     /* Start FreeRTOS scheduler. */
     vTaskStartScheduler();
-#endif
 
+#else
+
+    /* Not using FreeRTOS. Only 1 task is possible, and
+     * it should be called directly here.  */
     main_task_function(0);
+
+#endif
 
     while (true)
     {

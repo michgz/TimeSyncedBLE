@@ -34,6 +34,7 @@ protected slots:
   //void discoveredAllServices(void);
 
       void processBuffer(QBuffer *);
+      void processBuffer_simple(QBuffer * buf);
 
  // void on_service(QLowEnergyService::ServiceState newState);
 
@@ -84,6 +85,7 @@ public slots:
     void discoveredService(const QBluetoothUuid &newService);
     void on_service(QLowEnergyService::ServiceState newState);
     void deviceConnected(void);
+    void deviceDisconnected(void);
     void startIt(void);
     void characteristicChanged(QLowEnergyCharacteristic,QByteArray);
     void tryWriting(void);

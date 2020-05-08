@@ -54,8 +54,6 @@
 #include "nrf_sdh_soc.h"
 #include "nrf_sdm.h"
 
-#include "NordicUart.h"
-
 #define NRF_LOG_MODULE_NAME time_sync
 #define NRF_LOG_LEVEL 4
 #include "nrf_log.h"
@@ -613,7 +611,7 @@ uint32_t ts_get_sync_count(void)
 
 void ts_flash_out_debug(void)
 {
-    nus_queue_tx_data((uint8_t *) records_events, sizeof(records_events));
+    amts_queue_tx_data((uint8_t *) records_events, sizeof(records_events));
 }
 
 static inline bool sync_timer_offset_compensate(sync_pkt_t * p_pkt)

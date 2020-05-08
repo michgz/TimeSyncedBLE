@@ -45,6 +45,7 @@
 #include "nrf_error.h"
 #include "sdk_common.h"
 #include "app_error.h"
+#include "app_fifo.h"
 #include "ble_err.h"
 #include "ble_srv_common.h"
 
@@ -62,17 +63,19 @@ static void char_notification_send(nrf_ble_amts_t * p_ctx);
 static void init_random(void);
 
 
-#include "app_fifo.h"
-
 static app_fifo_t tx_fifo;
 static app_fifo_t rx_fifo;
 static uint8_t tx_fifo_buf[2048];
 static uint8_t rx_fifo_buf[256];
 
-void nus_init(void)
+static void fifos_init(void)
 {
-    APP_ERROR_CHECK(app_fifo_init(&tx_fifo, tx_fifo_buf, sizeof(tx_fifo_buf)));
-    APP_ERROR_CHECK(app_fifo_init(&rx_fifo, rx_fifo_buf, sizeof(rx_fifo_buf)));
+    ret_code_t err_code;
+
+    err_code = app_fifo_init(&tx_fifo, tx_fifo_buf, sizeof(tx_fifo_buf));
+    APP_ERROR_CHECK(err_code);
+    err_code = app_fifo_init(&rx_fifo, rx_fifo_buf, sizeof(rx_fifo_buf));
+    APP_ERROR_CHECK(err_code);
 }
 
 static bool haveCurrentCmd = false;
@@ -81,7 +84,7 @@ static nrf_ble_amts_t * static_ctx = NULL;
 
 static FILL_FN currentCmdFn;
 
-void nus_queue_tx_data(uint8_t const * p_data, unsigned int n_data)
+void amts_queue_tx_data(uint8_t const * p_data, unsigned int n_data)
 {
     if (static_ctx && !static_ctx->busy)
     {
@@ -96,8 +99,8 @@ void nus_queue_tx_data(uint8_t const * p_data, unsigned int n_data)
 
 }
 
-#define BLE_NUS_MAX_RX_CHAR_LEN       16// BLE_NUS_MAX_DATA_LEN /**< Maximum length of the RX Characteristic (in bytes). */
-#define BLE_NUS_MAX_TX_CHAR_LEN        BLE_NUS_MAX_DATA_LEN /**< Maximum length of the TX Characteristic (in bytes). */
+#define BLE_AMTS_MAX_RX_CHAR_LEN       16           /**< Maximum length of the RX Characteristic (in bytes). */
+#define BLE_AMTS_MAX_TX_CHAR_LEN       -            /**< Maximum length of the TX Characteristic (in bytes). Unused */
 
 
 /**@brief Function for handling the Connect event.
@@ -269,7 +272,7 @@ void StartSending(FILL_FN fn)
  * @param[in] p_evt       Nordic UART Service event.
  */
 /**@snippet [Handling the data received over BLE] */
-static void nus_data_handler(nrf_ble_amts_evt_t * p_evt)
+static void amts_data_handler(nrf_ble_amts_evt_t * p_evt)
 {
     if (p_evt->evt_type == BLE_ATMS_EVT_RX_DATA)
     {
@@ -318,6 +321,8 @@ void nrf_ble_amts_init(nrf_ble_amts_t * p_ctx, amts_evt_handler_t evt_handler)
     ble_uuid_t    ble_uuid;
     ble_uuid128_t base_uuid = {SERVICE_UUID_BASE};
 
+    fifos_init();
+
     static_ctx = p_ctx;
 
     err_code = sd_ble_uuid_vs_add(&base_uuid, &(p_ctx->uuid_type));
@@ -363,9 +368,9 @@ void nrf_ble_amts_init(nrf_ble_amts_t * p_ctx, amts_evt_handler_t evt_handler)
 
     // Add the RX Characteristic.
     memset(&add_char_params, 0, sizeof(add_char_params));
-    add_char_params.uuid                     = BLE_UUID_NUS_RX_CHARACTERISTIC;
+    add_char_params.uuid                     = BLE_UUID_NUS_RX_CHARACTERISTIC;  // Use the standard UUID value with a vendor-specific UUID type
     add_char_params.uuid_type                = p_ctx->uuid_type;
-    add_char_params.max_len                  = BLE_NUS_MAX_RX_CHAR_LEN;
+    add_char_params.max_len                  = BLE_AMTS_MAX_RX_CHAR_LEN;
     add_char_params.init_len                 = sizeof(uint8_t);
     add_char_params.is_var_len               = true;
     add_char_params.char_props.write         = 1;
@@ -380,7 +385,7 @@ void nrf_ble_amts_init(nrf_ble_amts_t * p_ctx, amts_evt_handler_t evt_handler)
         return ;//err_code;
     }
 
-    p_ctx->data_handler = nus_data_handler;
+    p_ctx->data_handler = amts_data_handler;
 
     return ;//NRF_SUCCESS;
 }

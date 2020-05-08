@@ -1,6 +1,6 @@
 <!DOCTYPE CrossStudio_Project_File>
 <solution Name="ble_app_time_sync_relay_s132" target="8" version="2">
-  <project Name="01_Peripheral">
+  <project Name="ble_app_time_sync_relay_s132">
     <configuration
       Name="Common"
       Placement="Flash"
@@ -281,10 +281,8 @@
     </folder>
     <folder Name="Board Support">
       <file file_name="$(SdkDir)/components/libraries/bsp/bsp.c" />
-      <file file_name="$(SdkDir)/components/libraries/bsp/bsp_btn_ble.c" />
       <folder Name="Headers">
         <file file_name="$(SdkDir)/components/libraries/bsp/bsp.h" />
-        <file file_name="$(SdkDir)/components/libraries/bsp/bsp_btn_ble.h" />
         <file file_name="$(SdkDir)/components/libraries/bsp/bsp_config.h" />
       </folder>
     </folder>
@@ -308,9 +306,6 @@
       <file file_name="./Services/ScanList.c" />
       <file file_name="./Services/ServiceConfig.c" />
       <file file_name="./Services/ServiceDebug.c" />
-      <file file_name="./Services/NordicUart.c">
-        <configuration Name="Common" build_exclude_from_build="Yes" />
-      </file>
       <file file_name="./Services/amts.c" />
       <file file_name="./Services/amtc.c" />
       <file file_name="./Services/BroadcastAdvertising.c" />
@@ -318,7 +313,6 @@
         <file file_name="./Services/ScanList.h" />
         <file file_name="./Services/ServiceConfig.h" />
         <file file_name="./Services/ServiceDebug.h" />
-        <file file_name="./Services/NordicUart.h" />
         <file file_name="./Services/BroadcastAdvertising.h" />
         <file file_name="./Services/amt.h" />
         <file file_name="./Services/uuids.h" />
@@ -374,8 +368,6 @@
       </folder>
     </folder>
     <folder Name="nRF_BLE_Services">
-      <file file_name="$(SdkDir)/components/ble/ble_services/ble_nus_c/ble_nus_c.c" />
-      <file file_name="$(SdkDir)/components/ble/ble_services/ble_nus/ble_nus.c" />
       <folder Name="Headers">
         <file file_name="$(SdkDir)/components/ble/ble_services/ble_nus/ble_nus.h" />
         <file file_name="$(SdkDir)/components/ble/ble_services/ble_nus_c/ble_nus_c.h" />

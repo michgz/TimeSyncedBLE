@@ -35,6 +35,18 @@ MainWindow::~MainWindow()
 #include <QDateTime>
 
 
+// The old values
+//#define SERVICE_UUID      "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
+//#define READ_CHAR_UUID    "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
+//#define WRITE_CHAR_UUID   "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
+
+
+//The new values
+#define SERVICE_UUID      "21171523-4740-4aa5-b66b-5d2c6851cc5c"
+#define READ_CHAR_UUID    "21171524-4740-4aa5-b66b-5d2c6851cc5c"
+#define WRITE_CHAR_UUID   "21170002-4740-4aa5-b66b-5d2c6851cc5c"
+
+
 
 void Worker::timeOut0016(void)
 {
@@ -43,7 +55,7 @@ void Worker::timeOut0016(void)
 
     // disable notification
     servs->writeDescriptor(
-                servs->characteristic(QBluetoothUuid(QString("6e400003-b5a3-f393-e0a9-e50e24dcca9e"))).descriptor(
+                servs->characteristic(QBluetoothUuid(QString(READ_CHAR_UUID))).descriptor(
                                                     QBluetoothUuid::ClientCharacteristicConfiguration)
                                                             , QByteArray::fromHex("0000"));
 
@@ -59,7 +71,7 @@ void Worker::timeOut000A(void)
 
     // disable notification
     servs->writeDescriptor(
-                servs->characteristic(QBluetoothUuid(QString("6e400003-b5a3-f393-e0a9-e50e24dcca9e"))).descriptor(
+                servs->characteristic(QBluetoothUuid(QString(READ_CHAR_UUID))).descriptor(
                                                     QBluetoothUuid::ClientCharacteristicConfiguration)
                                                             , QByteArray::fromHex("0000"));
 
@@ -90,7 +102,7 @@ void Worker::timeOut000E(void)
 
     // disable notification
     servs->writeDescriptor(
-                servs->characteristic(QBluetoothUuid(QString("6e400003-b5a3-f393-e0a9-e50e24dcca9e"))).descriptor(
+                servs->characteristic(QBluetoothUuid(QString(READ_CHAR_UUID))).descriptor(
                                                     QBluetoothUuid::ClientCharacteristicConfiguration)
                                                             , QByteArray::fromHex("0000"));
 
@@ -143,7 +155,7 @@ void Worker::startRead000A(uint32_t timeToRead)
 
         // enable notification
         servs->writeDescriptor(
-                    servs->characteristic(QBluetoothUuid(QString("6e400003-b5a3-f393-e0a9-e50e24dcca9e"))).descriptor(
+                    servs->characteristic(QBluetoothUuid(QString(READ_CHAR_UUID))).descriptor(
                                                         QBluetoothUuid::ClientCharacteristicConfiguration)
                                                                 , QByteArray::fromHex("0100"));
 
@@ -153,7 +165,7 @@ void Worker::startRead000A(uint32_t timeToRead)
         arr += QByteArray::fromRawData((const char *) &timeToRead, 4);
 
         servs->writeCharacteristic(
-                servs->characteristic(QBluetoothUuid(QString("6e400002-b5a3-f393-e0a9-e50e24dcca9e")))
+                servs->characteristic(QBluetoothUuid(QString(WRITE_CHAR_UUID)))
                     , arr, QLowEnergyService::WriteMode::WriteWithResponse);
 
     }
@@ -193,13 +205,13 @@ void Worker::startRead000E(void)
 
         // enable notification
         servs->writeDescriptor(
-                    servs->characteristic(QBluetoothUuid(QString("6e400003-b5a3-f393-e0a9-e50e24dcca9e"))).descriptor(
+                    servs->characteristic(QBluetoothUuid(QString(READ_CHAR_UUID))).descriptor(
                                                         QBluetoothUuid::ClientCharacteristicConfiguration)
                                                                 , QByteArray::fromHex("0100"));
 
         // Write the value
         servs->writeCharacteristic(
-                servs->characteristic(QBluetoothUuid(QString("6e400002-b5a3-f393-e0a9-e50e24dcca9e")))
+                servs->characteristic(QBluetoothUuid(QString(WRITE_CHAR_UUID)))
                     , QByteArray::fromHex("0E000000FFFFFFFF")
                         , QLowEnergyService::WriteMode::WriteWithResponse);
 
@@ -235,7 +247,7 @@ void Worker::gotReading000A(QLowEnergyCharacteristic x,QByteArray y)
 
     // read
     servs->readCharacteristic(
-                servs->characteristic(QBluetoothUuid(QString("6e400003-b5a3-f393-e0a9-e50e24dcca9e"))));
+                servs->characteristic(QBluetoothUuid(QString(READ_CHAR_UUID))));
 
     int i;
     QString ss;
@@ -265,7 +277,7 @@ void Worker::finishedReading000E(const QLowEnergyCharacteristic &x,const QByteAr
 
     // enable notification
     servs->writeDescriptor(
-                servs->characteristic(QBluetoothUuid(QString("6e400003-b5a3-f393-e0a9-e50e24dcca9e"))).descriptor(
+                servs->characteristic(QBluetoothUuid(QString(READ_CHAR_UUID))).descriptor(
                                                     QBluetoothUuid::ClientCharacteristicConfiguration)
                                                             , QByteArray::fromHex("0100"));
 #endif
@@ -297,7 +309,7 @@ void Worker::gotReading000E(QLowEnergyCharacteristic x,QByteArray y)
 
     // read
     servs->readCharacteristic(
-                servs->characteristic(QBluetoothUuid(QString("6e400003-b5a3-f393-e0a9-e50e24dcca9e"))));
+                servs->characteristic(QBluetoothUuid(QString(READ_CHAR_UUID))));
 
 
 
@@ -330,7 +342,7 @@ void Worker::gotReading000E(QLowEnergyCharacteristic x,QByteArray y)
 
     // read
  //   servs->readCharacteristic(
- //               servs->characteristic(QBluetoothUuid(QString("6e400003-b5a3-f393-e0a9-e50e24dcca9e"))));
+ //               servs->characteristic(QBluetoothUuid(QString(READ_CHAR_UUID))));
 
 
 }
@@ -351,6 +363,8 @@ void Worker::gotReading000E(QLowEnergyCharacteristic x,QByteArray y)
 
 static uint32_t u;
 
+static uint32_t total_rxed = 0;
+
 void Worker::finishedReading0016(const QLowEnergyCharacteristic &x,const QByteArray &y)
 {
     disconnect(servs, SIGNAL(characteristicRead(const QLowEnergyCharacteristic,const QByteArray)), this, SLOT(finishedReading0016(const QLowEnergyCharacteristic,const QByteArray)));
@@ -367,37 +381,61 @@ void Worker::gotReading0016(QLowEnergyCharacteristic x,QByteArray y)
     Q_UNUSED(x);
     emit foundService(QString("Got %1 Bytes").arg(y.length()));
 
-    timeOut0016();   // This tidies it up, even though haven't really timed out
+    total_rxed += y.length();
+    emit foundServicesCount(QString("Got total %1 Bytes").arg(total_rxed));
+
+    //timeOut0016();   // This tidies it up, even though haven't really timed out
 
 
-    if (y.length() >= 8)
+    if (false)
     {
-        if (ByteArrayGetU32(y, 0) == 0x80000016UL)
+        if (y.length() >= 8)
         {
-            //startRead000A(ByteArrayGetU32(y, 1));
-            u = ByteArrayGetU32(y, 1);
+            if (ByteArrayGetU32(y, 0) == 0x80000016UL)
+            {
+                //startRead000A(ByteArrayGetU32(y, 1));
+                u = ByteArrayGetU32(y, 1);
+            }
         }
-    }
 
-    connect(servs, SIGNAL(characteristicRead(const QLowEnergyCharacteristic,const QByteArray)), this, SLOT(finishedReading0016(const QLowEnergyCharacteristic,const QByteArray)));
+        connect(servs, SIGNAL(characteristicRead(const QLowEnergyCharacteristic,const QByteArray)), this, SLOT(finishedReading0016(const QLowEnergyCharacteristic,const QByteArray)));
+    }
 
     // read
-    servs->readCharacteristic(
-                servs->characteristic(QBluetoothUuid(QString("6e400003-b5a3-f393-e0a9-e50e24dcca9e"))));
-
-
-    int i;
-    QString ss;
-    QTextStream strText(&ss);
-    for (i = 0; i < y.length() && i < 16; i ++)
+    if (false)
     {
-        strText << QString("%1 ").arg((int)(unsigned char)y[i], 2, 16, QLatin1Char('0'));
+        servs->readCharacteristic(
+                    servs->characteristic(QBluetoothUuid(QString(READ_CHAR_UUID))));
     }
 
-    emit foundPacket(ss);
+    //if (rxbuf == nullptr)
+    {
+        rxbuf = new QBuffer(&y, this);
+
+        //rxbuf->open(QIODevice::WriteOnly|               QIODevice::Append);
+        //rxbuf->write(y);
+        //rxbuf->close();
+
+        emit gotTrace(rxbuf);
+
+        rxbuf = nullptr;
+    }
+
+
+    if (false)
+    {
+        int i;
+        QString ss;
+        QTextStream strText(&ss);
+        for (i = 0; i < y.length() && i < 16; i ++)
+        {
+            strText << QString("%1 ").arg((int)(unsigned char)y[i], 2, 16, QLatin1Char('0'));
+        }
+
+        emit foundPacket(ss);
+    }
 
 }
-
 
 
 void Worker::tryWriting(void)
@@ -406,8 +444,8 @@ void Worker::tryWriting(void)
     {
         // Start time-out timer
         timer0016.setSingleShot(true);
-        connect(&timer0016, &QTimer::timeout, this, &Worker::timeOut0016);
-        timer0016.start(1500);
+        //connect(&timer0016, &QTimer::timeout, this, &Worker::timeOut0016);
+        //timer0016.start(1500);
 
         // establish hook into notifications
         connect(servs, SIGNAL(characteristicChanged(QLowEnergyCharacteristic,QByteArray)),
@@ -415,15 +453,18 @@ void Worker::tryWriting(void)
 
         // enable notification
         servs->writeDescriptor(
-                    servs->characteristic(QBluetoothUuid(QString("6e400003-b5a3-f393-e0a9-e50e24dcca9e"))).descriptor(
+                    servs->characteristic(QBluetoothUuid(QString(READ_CHAR_UUID))).descriptor(
                                                         QBluetoothUuid::ClientCharacteristicConfiguration)
                                                                 , QByteArray::fromHex("0100"));
 
-        // Write the value
-        servs->writeCharacteristic(
-                servs->characteristic(QBluetoothUuid(QString("6e400002-b5a3-f393-e0a9-e50e24dcca9e")))
-                    , QByteArray::fromHex("16000000FFFFFFFF")
-                        , QLowEnergyService::WriteMode::WriteWithResponse);
+        if (false)
+        {
+            // Write the value -- currently not needed
+            servs->writeCharacteristic(
+                    servs->characteristic(QBluetoothUuid(QString(WRITE_CHAR_UUID)))
+                        , QByteArray::fromHex("16000000FFFFFFFF")
+                            , QLowEnergyService::WriteMode::WriteWithResponse);
+        }
 
     }
 }
@@ -453,6 +494,8 @@ void Worker::characteristicChanged(QLowEnergyCharacteristic x,QByteArray y)
 
 void Worker::on_service(QLowEnergyService::ServiceState newState)
 {
+    bool isKnownService = false;
+
     if (newState == QLowEnergyService::ServiceDiscovered)
     {
         emit foundService(QString("Char count: %1").arg(servs->characteristics().count()));
@@ -463,20 +506,22 @@ void Worker::on_service(QLowEnergyService::ServiceState newState)
             if (x.isValid())
             {
                 strText << x.uuid().toString() << "\r\n";
-                if (x.uuid() == QBluetoothUuid(QString("6e400003-b5a3-f393-e0a9-e50e24dcca9e")))
+                if (x.uuid() == QBluetoothUuid(QString(READ_CHAR_UUID)))
                 {
                     if ((x.properties() & 0x10) != 0)
                     {
                         readChar = &x;
+                        isKnownService = true;
                     }
 
                     emit foundConnection(QString("props %1").arg(x.properties(), 2, 16));
                 }
-                else if (x.uuid() == QBluetoothUuid(QString("6e400002-b5a3-f393-e0a9-e50e24dcca9e")))
+                else if (x.uuid() == QBluetoothUuid(QString(WRITE_CHAR_UUID)))
                 {
                     if ((x.properties() & 0x0C) != 0)
                     {
                         writeChar = &x;
+                        isKnownService = true;
                     }
                 }
             }
@@ -484,7 +529,10 @@ void Worker::on_service(QLowEnergyService::ServiceState newState)
         emit foundCharacteristic(ss);
     }
 
-    QTimer::singleShot(2000, this, &Worker::tryWriting);
+    if (isKnownService)
+    {
+        QTimer::singleShot(2000, this, &Worker::tryWriting);
+    }
 
 }
 
@@ -507,7 +555,7 @@ void Worker::discoveredAllServices(void)
 
     for (i = 0; i < c; i ++)
     {
-        if (qctl->services()[i] == QBluetoothUuid(QString("6e400001-b5a3-f393-e0a9-e50e24dcca9e")))
+        if (qctl->services()[i] == QBluetoothUuid(QString(SERVICE_UUID)))
         {
             startDiscoveringServers(qctl->createServiceObject(qctl->services()[i]));
         }
@@ -515,6 +563,10 @@ void Worker::discoveredAllServices(void)
 
 }
 
+void Worker::deviceDisconnected(void)
+{
+   emit foundServicesCount("Whoops! Disconnected");
+}
 
 void Worker::deviceConnected(void)
 {
@@ -533,11 +585,16 @@ void MainWindow::on_ble_error(QLowEnergyController::Error newError)
 
 }
 
+static QString fname;
+
 void Worker::startIt(void)
 {
+    fname = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss'.txt'");
+
     if (qctl)
     {
         connect(qctl, &QLowEnergyController::connected, this, &Worker::deviceConnected);
+        connect(qctl, &QLowEnergyController::disconnected, this, &Worker::deviceDisconnected);
 
         qctl->connectToDevice();
     }
@@ -562,9 +619,9 @@ void MainWindow::processBuffer(QBuffer * buf)
     QLineSeries *series3 = new QLineSeries;
     series3->setName("Z");
 
-    QString fname = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss'.txt'");
+    QString fname1 = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss'.txt'");
 
-    QFile file(fname);
+    QFile file(fname1);
     if (file.open(QIODevice::WriteOnly | QIODevice::NewOnly | QIODevice::Text))
     {
         if (buf->open(QIODevice::ReadOnly))
@@ -628,6 +685,42 @@ void MainWindow::processBuffer(QBuffer * buf)
 }
 
 
+// Just write the raw hex
+void MainWindow::processBuffer_simple(QBuffer * buf)
+{
+    QFile file(fname);
+    if (file.open(QIODevice::Append | QIODevice::Text))
+    {
+        QTextStream out(&file);
+
+        out << QDateTime::currentDateTime().toString("HH:mm:ss.zzz    ");
+
+        if (buf->open(QIODevice::ReadOnly))
+        {
+            int i;
+            for (i = 0; ; i ++)
+            {
+                QByteArray b = buf->read(16);
+                int j;
+                for(j = 0; j < b.length(); j ++)
+                {
+                    out << QString("%1 ").arg((int)(unsigned char)b[j], 2, 16, QLatin1Char('0'));
+                }
+                out << "\r\n";
+                if (b.length() < 16)
+                {
+                    break; // Finished reading
+                }
+            }
+            buf->close();
+        }
+        file.close();
+    }
+
+    delete buf;
+}
+
+
 
 void MainWindow::on_connectButton_clicked(){}
 
@@ -639,31 +732,34 @@ void MainWindow::deviceDiscovered(const QBluetoothDeviceInfo &device)
 
     ui->debugLabel->setText(newText);
 
-    if (device.address() == QBluetoothAddress("F1:C8:1A:8D:37:8B")
-            ||
+    if (/*device.address() == QBluetoothAddress("F1:C8:1A:8D:37:8B")
+            ||*/
         device.address() == QBluetoothAddress("DC:9E:80:E8:B2:83")
             )
     {
-        Worker * wrkr = new Worker(this, device);
+        //if (device.name().left(8) == "nRF Rela" )
+        {
+            Worker * wrkr = new Worker(this, device);
 
-        connect(wrkr, &Worker::foundService, [=]( const QString &uuidValue ) { ui->uuidLabel->setText(uuidValue); });
+            connect(wrkr, &Worker::foundService, [=]( const QString &uuidValue ) { ui->uuidLabel->setText(uuidValue); });
 
-        connect(wrkr, &Worker::foundCharacteristic, [=]( const QString &uuidValue ) { ui->label_11->setText(uuidValue); });
+            connect(wrkr, &Worker::foundCharacteristic, [=]( const QString &uuidValue ) { ui->label_11->setText(uuidValue); });
 
-        connect(wrkr, &Worker::foundServicesCount, [=]( const QString &uuidValue ) { ui->uuidLabel->setText(uuidValue); });
+            connect(wrkr, &Worker::foundServicesCount, [=]( const QString &uuidValue ) { ui->uuid2label->setText(uuidValue); });
 
-        connect(wrkr, &Worker::foundConnection, [=]( const QString &uuidValue ) { ui->uuidLabel->setText(uuidValue); });
+            connect(wrkr, &Worker::foundConnection, [=]( const QString &uuidValue ) { ui->uuidLabel->setText(uuidValue); });
 
-        connect(wrkr, &Worker::foundPacket, [=]( const QString &uuidValue ) { ui->label_10->append(uuidValue/* + QString("\n")*/);});
+            connect(wrkr, &Worker::foundPacket, [=]( const QString &uuidValue ) { ui->label_10->append(uuidValue/* + QString("\n")*/);});
 
-        connect(wrkr, &Worker::debugLog, [=]( const QString &uuidValue ) { ui->label_10->append(uuidValue/* + QString("\n")*/);});
+            connect(wrkr, &Worker::debugLog, [=]( const QString &uuidValue ) { ui->label_10->append(uuidValue/* + QString("\n")*/);});
 
-        QBuffer * buf_1 = new QBuffer();
-        wrkr->setBuffer(buf_1);
+            QBuffer * buf_1 = new QBuffer();
+            wrkr->setBuffer(buf_1);
 
-        connect(wrkr, &Worker::gotTrace, this, &MainWindow::processBuffer);
+            connect(wrkr, &Worker::gotTrace, this, &MainWindow::processBuffer_simple);
 
-        connect(ui->connectButton, &QPushButton::clicked, wrkr, &Worker::startIt);
+            connect(ui->connectButton, &QPushButton::clicked, wrkr, &Worker::startIt);
+        }
     }
 }
 

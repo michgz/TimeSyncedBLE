@@ -95,10 +95,10 @@
    <widget class="QLabel" name="uuid2label">
     <property name="geometry">
      <rect>
-      <x>290</x>
+      <x>600</x>
       <y>320</y>
-      <width>461</width>
-      <height>17</height>
+      <width>151</width>
+      <height>20</height>
      </rect>
     </property>
     <property name="text">

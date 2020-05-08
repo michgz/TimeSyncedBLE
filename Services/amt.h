@@ -390,6 +390,9 @@ void nrf_ble_amts_rbc_set(nrf_ble_amts_t * p_ctx, uint32_t byte_cnt);
  */
 void nrf_ble_amts_on_gatt_evt(nrf_ble_amts_t * p_ctx, nrf_ble_gatt_evt_t const * p_gatt_evt);
 
+/**@brief Queue data to send.  */
+extern void amts_queue_tx_data(uint8_t const * p_data, unsigned int n_data);
+
 /** @} */ // End tag for the Server.
 
 #include "app_fifo.h"

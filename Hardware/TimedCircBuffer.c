@@ -4,9 +4,9 @@
 
 #include "TimedCircBuffer.h"
 #include "app_error.h"
-#include "NordicUart.h"
 #include "Config.h"
 
+#include "amt.h"
 #include "time_sync.h"
 #include "app_fifo.h"
 
@@ -221,9 +221,6 @@ void TimedCircBuffer_Add(const XYZ_T * xyz)
     {
         // The lock is complete! Trigger the sending.
         buf.is_sending = true;
-
-  //      uint32_t send_data[] = {TRANSMIT_CODE__DATA, buf.read_cnt_remaining};
- //       nus_queue_tx_data((uint8_t *) send_data, sizeof(send_data));
     }
 }
 
@@ -251,19 +248,19 @@ static unsigned int TestSendRemainingBytes = 0;
 
 static void TimedCircBuffer_StartSending(void)
 {
+    if (isUseSyncTimer() || !isTestDevice())
+    {
+        // In this case, we require the sync timer to have worked, i.e. lock has been achieved.
+        if (! buf.is_locked)
+        {
+            PERIPHERAL_ERROR(0x1B, 0, 0);
+            return;
+        }
+    }
+
+    TestSendRemainingBytes = 10000;  // Should be calculated from the size of the lock area.
     if (isTestDevice())
     {
-        if (isUseSyncTimer())
-        {
-            // In this case, we require the sync timer to have worked, i.e. lock has been achieved.
-            if (! buf.is_locked)
-            {
-                PERIPHERAL_ERROR(0x1B, 0, 0);
-                return;
-            }
-        }
-
-        TestSendRemainingBytes = 10000;
         srand( *((unsigned int *)0x10000080 ) );   // FICR "Encryption Root"
     }
 }
@@ -528,7 +525,7 @@ bool TimedCircBuffer_RxOperation(uint32_t code, uint32_t data)
                 (void) data;
 
                 uint32_t resp [2] = {INSTRUCTION_CODE__QUERY_IS_SYNCED + 0x80000000UL, ts_is_synced()};
-                nus_queue_tx_data((uint8_t *) resp, 2*sizeof(uint32_t));
+                amts_queue_tx_data((uint8_t *) resp, 2*sizeof(uint32_t));
             }
             break;
         case INSTRUCTION_CODE__QUERY_SYNC_DEBUGS:
@@ -536,7 +533,7 @@ bool TimedCircBuffer_RxOperation(uint32_t code, uint32_t data)
                 (void) data;
 
                 uint32_t resp [1] = {INSTRUCTION_CODE__QUERY_SYNC_DEBUGS + 0x80000000UL};
-                nus_queue_tx_data((uint8_t *) resp, 1*sizeof(uint32_t));
+                amts_queue_tx_data((uint8_t *) resp, 1*sizeof(uint32_t));
 
                 ts_flash_out_debug();
             }
@@ -546,7 +543,7 @@ bool TimedCircBuffer_RxOperation(uint32_t code, uint32_t data)
                 (void) data;
 
                 uint32_t resp [2] = {INSTRUCTION_CODE__QUERY_CURRENT_TIME + 0x80000000UL, (uint32_t) (ts_timestamp_get_ticks_u64(6) / 32000ULL) };
-                nus_queue_tx_data((uint8_t *) resp, 2*sizeof(uint32_t));
+                amts_queue_tx_data((uint8_t *) resp, 2*sizeof(uint32_t));
             }
             break;
         case INSTRUCTION_CODE__LOCK:
@@ -554,7 +551,7 @@ bool TimedCircBuffer_RxOperation(uint32_t code, uint32_t data)
                 bool res = lock_buffer_at_time_point(&buf, data/*      (uint32_t) (ts_timestamp_get_ticks_u64(6) / 32000ULL)   */         );
 
                 uint32_t resp [2] = {INSTRUCTION_CODE__LOCK + 0x80000000UL, (uint32_t) res};
-                nus_queue_tx_data((uint8_t *) resp, 2*sizeof(uint32_t));
+                amts_queue_tx_data((uint8_t *) resp, 2*sizeof(uint32_t));
             }
             break;
         case INSTRUCTION_CODE__IS_LOCKED:
@@ -562,7 +559,7 @@ bool TimedCircBuffer_RxOperation(uint32_t code, uint32_t data)
                 (void) data;
 
                 uint32_t resp [2] = {INSTRUCTION_CODE__IS_LOCKED + 0x80000000UL, (uint32_t) buf.is_locked};
-                nus_queue_tx_data((uint8_t *) resp, 2*sizeof(uint32_t));
+                amts_queue_tx_data((uint8_t *) resp, 2*sizeof(uint32_t));
             }
             break;
         case INSTRUCTION_CODE__READ_OUT:

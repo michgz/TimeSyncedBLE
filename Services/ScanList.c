@@ -100,7 +100,7 @@ bool ScanList_FifoFill(app_fifo_t * const p_fifo)
         APP_ERROR_CHECK(NRF_ERROR_NULL);
     }
 
-    if (read_ptr >= leaf_list_ptr)
+    if (read_ptr > leaf_list_ptr)
     {
         return false;  // Finished
     }
@@ -118,15 +118,16 @@ bool ScanList_FifoFill(app_fifo_t * const p_fifo)
             len = 8;
             app_fifo_write(p_fifo, (uint8_t * const)read_out, &len);
             available -= len;
+            read_ptr ++;
         }
 
-        if (read_ptr >= leaf_list_ptr)
+        if (read_ptr > leaf_list_ptr)
         {
             return true;  // Finished
         }
 
         len = 8;
-        app_fifo_write(p_fifo, (uint8_t * const)&leaf_list[read_ptr].gap_addr, &len);
+        app_fifo_write(p_fifo, (uint8_t * const)&leaf_list[read_ptr-1].gap_addr, &len);
         available -= len;
 
         read_ptr ++;

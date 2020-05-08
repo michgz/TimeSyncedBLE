@@ -7,7 +7,7 @@
 // Is this a "test" device? A test device doesn't return accelerometer data, it just returns
 // a similar quantity of random bytes. The difference is that there is no need to wait for
 // or temporally align the data it is always just available.
-#define isTestDevice()   (true)
+#define isTestDevice()   (false)
 
 
 
