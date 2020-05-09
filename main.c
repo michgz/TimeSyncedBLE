@@ -1227,6 +1227,9 @@ static bool ble_evt_is_advertising_timeout(ble_evt_t const * p_ble_evt)
     return (p_ble_evt->header.evt_id == BLE_GAP_EVT_ADV_SET_TERMINATED);
 }
 
+static ble_gap_addr_t m_curr_periph_addr;
+static uint16_t m_curr_periph_conn_handle;
+
 
 /**@brief   Function for handling BLE events from peripheral and central applications.
  * @details Updates the status LEDs used to report the activity of the applications.
@@ -1256,6 +1259,9 @@ static void on_ble_evt(ble_evt_t const * p_ble_evt)
                 // We must be in the central role in order to do discovery
                 if (p_ble_evt->evt.gap_evt.params.connected.role == BLE_GAP_ROLE_CENTRAL)
                 {
+                    m_curr_periph_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
+                    memcpy(&m_curr_periph_addr, &p_ble_evt->evt.gap_evt.params.connected.peer_addr, sizeof(ble_gap_addr_t));
+
                     err_code = ble_db_discovery_start(&m_db_discovery[0], p_ble_evt->evt.gap_evt.conn_handle);
                     APP_ERROR_CHECK(err_code);
                 }
@@ -1342,6 +1348,12 @@ static void on_ble_evt(ble_evt_t const * p_ble_evt)
             {
                 // Start scanning.
                 //scan_start();
+
+                if (p_ble_evt->evt.gap_evt.conn_handle == m_curr_periph_conn_handle)
+                {
+                    m_curr_periph_conn_handle = BLE_CONN_HANDLE_INVALID;
+                    memset(&m_curr_periph_addr, 0, sizeof(ble_gap_addr_t));
+                }
 
                 if (ble_conn_state_central_conn_count() == 0)
                 {
@@ -1542,13 +1554,17 @@ static void notif_timeout_handler(void * p_context)
             // Timed out. In the summary case, upload the summary now.
             if(isCentral() && isRelaySummary())
             {
-                uint32_t summ [4] = {0x8000000F, 0, time_taken, p_amt_c->bytes_rcvd_cnt};
-
-                summ[1] = amts_get_rejected_byte_count();
+                uint32_t summ [6] = {0x8000000F, 0, 0, time_taken, p_amt_c->bytes_rcvd_cnt, amts_get_rejected_byte_count()};
 
                 if (p_amt_c->conn_handle != BLE_CONN_HANDLE_INVALID)
                 {
                     // Get the ble_addr_t to summ[1:2]
+
+                    if (p_amt_c->conn_handle == m_curr_periph_conn_handle)
+                    {
+                        memcpy((void *) &summ[1], &m_curr_periph_addr, sizeof(ble_gap_addr_t));
+                    }
+
                 }
                 amts_queue_tx_data((uint8_t *) summ, sizeof(summ));
             }
