@@ -23,7 +23,7 @@ static const inline bool doDetect(void) {return true;}
 #define DETECT_N   (1000)
 
 // Square of the magnitude difference from the longer-term average to trigger a detection
-#define DETECT_SQ_MAG    (100*100)
+#define DETECT_SQ_MAG    (50*50)
 
 /* A circular buffer.   */
 typedef struct buf_tag
@@ -81,6 +81,11 @@ static void AvgBuffer_Init(avg_buf_T * p_avg_buf)
 
     // Holdoff after a detection before the next one.
     p_avg_buf->trigger_holdoff = 1250;
+
+    p_avg_buf->trigger_countdown = 0;
+
+    // Start with a small holdoff.
+    p_avg_buf->trigger_holdoff_countdown = 625;
 }
 
 
@@ -223,10 +228,7 @@ static uint32_t sqMag(avg_buf_T * p_buf, const XYZ_T * xyz)
 }
 
 // A detection has been triggered
-static inline void trigger(uint32_t sq_mag)
-{
-}
-
+extern void trigger(uint32_t size);
 
 
 static void processTrigger(avg_buf_T * const p_avg, uint32_t sq_mag, const uint32_t sq_mag_thresh)

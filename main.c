@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <math.h>
 #include "boards.h"
 #include "nordic_common.h"
 #include "FreeRTOS.h"
@@ -584,6 +585,25 @@ static void check_manu_data(char const * x, int len)
     }
 
 }
+
+void trigger(uint32_t size)
+{
+    if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
+    {
+
+        if (isUploadTriggerSize())
+        {
+            uint32_t root_size = (uint32_t) sqrtf((float) size);
+
+            uint32_t data [3] = {0x80000022, root_size, (uint32_t) (ts_timestamp_get_ticks_u64(6) / 32000ULL)  };
+
+            amts_queue_tx_data((uint8_t const *) &data, 3*sizeof(uint32_t));
+        }
+
+    }
+
+} 
+
 
 /** Returns true if triggered.   */
 static bool trigger_from_scan_timer_timeout(void)
@@ -1950,7 +1970,7 @@ static void main_task_function (void * pvParameter)
 
     if (!isTestDevice())
     {
-        if (isPeripheral())
+        if (isPeripheral() || !isTestDevice())
         {
             nrf_gpio_pin_clear(SEN_ENABLE); // accelerometer power on
 

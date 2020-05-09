@@ -22,7 +22,7 @@
 
 // For peripheral, flashes its LED when it receives a broadcast message.
 // For central, flashes its LED when it sends a broadcast message.
-#define isLedOnBroadcast()   (true)
+#define isLedOnBroadcast()   (false)
 
 
 
@@ -37,5 +37,7 @@
 // Send a packet size 10000 bytes with increasing values to detect missing values.
 #define isDebugPacket()  (false)
 
+// On detecting a trigger, don't do anything other than inform the upstream
+#define isUploadTriggerSize()   (true)
 
 #endif // CONFIG_H__
