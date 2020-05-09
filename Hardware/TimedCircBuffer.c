@@ -60,6 +60,11 @@ typedef struct avg_buf_tag
     uint32_t            xyz_sum_n;
     XYZ_T               average;
     bool                have_average;
+    uint32_t            half_window_size;
+    uint32_t            trigger_countdown;
+    uint32_t            trigger_holdoff;
+    uint32_t            trigger_holdoff_countdown;
+    uint32_t            largest_so_far; // Square magnitude of the largest offset so far.
 
 } avg_buf_T;
 
@@ -70,6 +75,12 @@ static void AvgBuffer_Init(avg_buf_T * p_avg_buf)
 {
     p_avg_buf->have_average = false;
     p_avg_buf->xyz_sum_n = 0;
+
+    // A delay between getting a reading and doing a detection. Units of samples.
+    p_avg_buf->half_window_size = 125;
+
+    // Holdoff after a detection before the next one.
+    p_avg_buf->trigger_holdoff = 1250;
 }
 
 
@@ -212,10 +223,51 @@ static uint32_t sqMag(avg_buf_T * p_buf, const XYZ_T * xyz)
 }
 
 // A detection has been triggered
-static inline void trigger(void)
+static inline void trigger(uint32_t sq_mag)
 {
 }
 
+
+
+static void processTrigger(avg_buf_T * const p_avg, uint32_t sq_mag, const uint32_t sq_mag_thresh)
+{
+    if (p_avg->trigger_countdown == 0)
+    {
+        // Not yet triggered. Handle a new value here.
+
+        // First, check if held off.
+        if (p_avg->trigger_holdoff_countdown > 0)
+        {
+            p_avg->trigger_holdoff_countdown --;
+            return;
+        }
+
+        // Now do the trigger detection.
+        if (sq_mag > sq_mag_thresh)
+        {
+            p_avg->trigger_countdown = p_avg->half_window_size;
+            p_avg->largest_so_far = sq_mag;
+        }
+    }
+    else
+    {
+        // Has already triggered. Must handle differently.
+
+        if (sq_mag > p_avg->largest_so_far)
+        {
+            p_avg->largest_so_far = sq_mag;
+        }
+
+        p_avg->trigger_countdown --;
+        if (p_avg->trigger_countdown == 0)
+        {
+            // Triggered!
+            trigger(p_avg->largest_so_far);
+            p_avg->trigger_holdoff_countdown = p_avg->trigger_holdoff;
+        }
+    }
+
+}
 
 
 static void Add(buf_T * const p_buf, const XYZ_T * xyz)
@@ -265,10 +317,9 @@ void TimedCircBuffer_Add(const XYZ_T * xyz)
     if (doDetect() && !!p_Avg)
     {
         AddToAverage(p_Avg, xyz);
-        if (sqMag(p_Avg, xyz) > DETECT_SQ_MAG)
-        {
-            trigger();
-        }
+
+        uint32_t sq_mag = sqMag(p_Avg, xyz);
+        processTrigger(p_Avg, sq_mag, DETECT_SQ_MAG);
     }
 
 }

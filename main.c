@@ -208,7 +208,7 @@ static void scan_start (void);
 #define DEVICE_ID_BYTE_0_ADDR   0x10000060
 #define DEVICE_ID_BYTE_0     (*((uint8_t const * const)DEVICE_ID_BYTE_0_ADDR))
 
-static const bool isCentral(void) {return (DEVICE_ID_BYTE_0 != 0x07);}
+static const bool isCentral(void) {return (DEVICE_ID_BYTE_0 == 0x07);}
 static const bool isPeripheral(void) {return !isCentral();}
 #endif
 #ifdef CENTRAL
