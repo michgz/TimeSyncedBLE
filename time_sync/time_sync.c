@@ -54,6 +54,8 @@
 #include "nrf_sdh_soc.h"
 #include "nrf_sdm.h"
 
+#include "amt.h"
+
 #define NRF_LOG_MODULE_NAME time_sync
 #define NRF_LOG_LEVEL 4
 #include "nrf_log.h"

@@ -416,7 +416,6 @@ nrfx_gpiote_in_event_disable(PIN_IN);
 /* This function is never called. It doesn't matter.   */
 void timer_led_init(void)
 {
-    TimedCircBuffer_Init();
 }
 
 

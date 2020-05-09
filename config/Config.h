@@ -7,7 +7,10 @@
 // Is this a "test" device? A test device doesn't return accelerometer data, it just returns
 // a similar quantity of random bytes. The difference is that there is no need to wait for
 // or temporally align the data it is always just available.
-#define isTestDevice()   (false)
+#define isTestDevice()   (true)
+
+// Send consecutive values rather than random values
+#define isTestDeviceDebug()   (true)
 
 
 
@@ -30,6 +33,9 @@
 // In the central case, transmit a time sync message at regular intervals. In the peripheral case,
 // be sensitive to time sync messages.
 #define isUseSyncTimer()     (true)
+
+// Send a packet size 10000 bytes with increasing values to detect missing values.
+#define isDebugPacket()  (false)
 
 
 #endif // CONFIG_H__

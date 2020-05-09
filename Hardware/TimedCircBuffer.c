@@ -25,44 +25,81 @@ static const inline bool doDetect(void) {return true;}
 // Square of the magnitude difference from the longer-term average to trigger a detection
 #define DETECT_SQ_MAG    (100*100)
 
-/* Macro for declaring a circular buffer.   */
-#define DEF_CIRC_BUFFER(_name, _size)       \
-typedef struct _name ## _tag                \
-{                                           \
-    const size_t        size;               \
-    const size_t        halfLockSize;           \
-    const size_t        recordSize;         \
-    bool                is_locked;          \
-    unsigned int        ptr;                \
-    bool                has_wrapped; \
-    XYZ_T               vals [(_size)];     \
-    int32_t             xyz_sum[3];         \
-    uint32_t            xyz_sum_n;          \
-    XYZ_T               average;            \
-    bool                have_average;       \
-    uint32_t            time_base;          \
-    uint32_t            lock_time;          \
-    bool is_sending; \
-    unsigned lock_start; \
-    unsigned lock_end;   \
-    bool is_lock_overflowed; \
-    unsigned int read_ptr ;/* in bytes not records */    \
-    unsigned int read_cnt_remaining; /*in bytes*/  \
-} _name ## _T   ;                           \
-static _name ## _T  _name = {(_size),(_size)/4,sizeof(XYZ_T),false,0U,false};  \
+/* A circular buffer.   */
+typedef struct buf_tag
+{
+    size_t        size;
+    size_t        halfLockSize;
+    size_t        recordSize;
+    bool                is_locked;
+    unsigned int        ptr;
+    bool                has_wrapped;
+    uint32_t            time_base;
+    uint32_t            lock_time;
+    bool is_sending;
+    unsigned lock_start;
+    unsigned lock_end;
+    bool is_lock_overflowed;
+    unsigned int read_ptr ;/* in bytes not records */
+    unsigned int read_cnt_remaining; /*in bytes*/
+    XYZ_T               vals [1];
+} buf_T;
+
+//static _name ## _T  _name = {(_size),(_size)/4,sizeof(XYZ_T),false,0U,false};  \
+
+buf_T * p_Buf;
 
 
 /* Declare the buffer by name and size.   */
-DEF_CIRC_BUFFER(buf, 2500);
+//DEF_CIRC_BUFFER(buf, 250);
+
+
+typedef struct avg_buf_tag
+{
+    int32_t             xyz_sum[3];
+    uint32_t            xyz_sum_n;
+    XYZ_T               average;
+    bool                have_average;
+
+} avg_buf_T;
+
+
+avg_buf_T * p_Avg;
+
+static void AvgBuffer_Init(avg_buf_T * p_avg_buf)
+{
+    p_avg_buf->have_average = false;
+    p_avg_buf->xyz_sum_n = 0;
+}
 
 
 static bool lock_buffer_at_time_point(buf_T * p_buf, uint32_t time_point);
 
-void TimedCircBuffer_Init(void)
+void TimedCircBuffer_Init(size_t size_of_buffer)
 {
-    buf.ptr = 0U;
-    buf.xyz_sum_n = 0U;
-    buf.have_average = false;
+    p_Avg = malloc(sizeof(avg_buf_T));
+    if (!p_Avg)
+    {
+        APP_ERROR_CHECK(NRF_ERROR_NO_MEM);
+    }
+    AvgBuffer_Init(p_Avg);
+
+    if (size_of_buffer > 0)
+    {
+        p_Buf = malloc(sizeof(buf_T) + size_of_buffer*sizeof(XYZ_T));
+        if (!p_Buf)
+        {
+            APP_ERROR_CHECK(NRF_ERROR_NO_MEM);
+        }
+        memset((void *)p_Buf, 0, sizeof(buf_T));
+        p_Buf->size = size_of_buffer;
+        p_Buf->halfLockSize = size_of_buffer/4;
+        p_Buf->recordSize = sizeof(XYZ_T);
+    }
+    else
+    {
+        p_Buf = NULL;
+    }
 }
 
 
@@ -88,6 +125,8 @@ static void PERIPHERAL_ERROR(uint32_t err, uint32_t v1, uint32_t v2)
 // the calculations.
 ////////////////////////////////////////////////////////////////////////
 
+#if 0
+
 static void unitTest_1(void)
 {
     buf.ptr = 200;
@@ -106,13 +145,14 @@ static void unitTest_2(void)
     lock_buffer_at_time_point(&buf, 12600);
 }
 
+#endif
+
 void TimedCircBuffer_UnitTests(void)
 {
-    unitTest_1();
-    unitTest_2();
-    buf.ptr = 0U; buf.is_locked = false; buf. has_wrapped = false; buf.is_sending = false;
+    //unitTest_1();
+    //unitTest_2();
+    //buf.ptr = 0U; buf.is_locked = false; buf. has_wrapped = false; buf.is_sending = false;
 }
-
 
 
 enum
@@ -130,7 +170,7 @@ enum
 
 
 // Add a value to the longer-term average
-static void AddToAverage(buf_T * p_buf, const XYZ_T * xyz)
+static void AddToAverage(avg_buf_T * p_buf, const XYZ_T * xyz)
 {
     p_buf->xyz_sum[0] += xyz->xyz[0];
     p_buf->xyz_sum[1] += xyz->xyz[1];
@@ -152,7 +192,7 @@ static void AddToAverage(buf_T * p_buf, const XYZ_T * xyz)
 }
 
 // Calculate a square difference from the long term average
-static uint32_t sqMag(buf_T * p_buf, const XYZ_T * xyz)
+static uint32_t sqMag(avg_buf_T * p_buf, const XYZ_T * xyz)
 {
     if (!p_buf->have_average)
     {
@@ -177,51 +217,60 @@ static inline void trigger(void)
 }
 
 
-void TimedCircBuffer_Add(const XYZ_T * xyz)
+
+static void Add(buf_T * const p_buf, const XYZ_T * xyz)
 {
-    if (buf.is_lock_overflowed)
+    if (p_buf->is_lock_overflowed)
     {
         return;
     }
 
-    if (buf.ptr >= buf.size)
+    if (p_buf->ptr >= p_buf->size)
     {
-        buf.ptr = 0U;
-        buf.has_wrapped = true;
+        p_buf->ptr = 0U;
+        p_buf->has_wrapped = true;
 
         // Get the current accurate time. The function returns values in 16MHz accuracy, so this is changing to 
         // 16M / 32000 = 500Hz.
-        buf.time_base = (uint32_t) (ts_timestamp_get_ticks_u64(6) / 32000ULL);
+        p_buf->time_base = (uint32_t) (ts_timestamp_get_ticks_u64(6) / 32000ULL);
     }
 
-    // Handle the long-term average calculation if configured to do so.
-    if (doDetect())
-    {
-        AddToAverage(&buf, xyz);
-    }
 
-    if (buf.is_locked && buf.ptr == buf.lock_start)
+    if (p_buf->is_locked && p_buf->ptr == p_buf->lock_start)
     {
         // The lock has overflowed. Can't write to it.
-        buf.is_lock_overflowed = true;
+        p_buf->is_lock_overflowed = true;
         return;
     }
 
-    if (doDetect())
+    memcpy((void *)&p_buf->vals[p_buf->ptr ++], (void *) xyz, sizeof(XYZ_T));
+
+    if (p_buf->is_locked && p_buf->ptr == p_buf->lock_end)
     {
-        if (sqMag(&buf, xyz) > DETECT_SQ_MAG)
+        // The lock is complete! Trigger the sending.
+        p_buf->is_sending = true;
+    }
+}
+
+
+void TimedCircBuffer_Add(const XYZ_T * xyz)
+{
+    // Add to the buffer
+    if (!!p_Buf)
+    {
+        Add(p_Buf, xyz);
+    }
+
+    // Handle the long-term average calculation if configured to do so.
+    if (doDetect() && !!p_Avg)
+    {
+        AddToAverage(p_Avg, xyz);
+        if (sqMag(p_Avg, xyz) > DETECT_SQ_MAG)
         {
             trigger();
         }
     }
 
-    memcpy((void *)&buf.vals[buf.ptr ++], (void *) xyz, sizeof(XYZ_T));
-
-    if (buf.is_locked && buf.ptr == buf.lock_end)
-    {
-        // The lock is complete! Trigger the sending.
-        buf.is_sending = true;
-    }
 }
 
 static void release_lock(buf_T * p_buf)
@@ -251,7 +300,7 @@ static void TimedCircBuffer_StartSending(void)
     if (isUseSyncTimer() || !isTestDevice())
     {
         // In this case, we require the sync timer to have worked, i.e. lock has been achieved.
-        if (! buf.is_locked)
+        if (!p_Buf || ! p_Buf->is_locked)
         {
             PERIPHERAL_ERROR(0x1B, 0, 0);
             return;
@@ -291,7 +340,10 @@ static bool Error_FifoFill(app_fifo_t * const p_fifo)
     err_val[0] = 0;
     TestSendRemainingBytes = 0;
 
-    release_lock(&buf);
+    if (!!p_Buf)
+    {
+        release_lock(p_Buf);
+    }
 
     return (length > 0);
 }
@@ -308,17 +360,90 @@ static bool TestDevice_FifoFill(app_fifo_t * const p_fifo)
 
     if (length > 0)
     {
-        uint32_t i;
-        for(i = 0; i < length; i ++)
+        if (isTestDeviceDebug())
         {
-            app_fifo_put(p_fifo, (uint8_t)rand());
+            uint32_t length_2 = length;
+            while (length_2 >= 4)
+            {
+                uint32_t val = 10000 - TestSendRemainingBytes;
+                uint32_t length_3 = 4;
+                app_fifo_write(p_fifo, (const uint8_t *)&val, &length_3);
+
+                length_2 -= 4;
+                TestSendRemainingBytes -= 4;
+                if (TestSendRemainingBytes < 4)
+                {
+                    break;
+                }
+            }
+
         }
-        TestSendRemainingBytes -= length;
+        else
+        {
+            uint32_t i;
+            for(i = 0; i < length; i ++)
+            {
+                app_fifo_put(p_fifo, (uint8_t)rand());
+            }
+            TestSendRemainingBytes -= length;
+        }
     }
 
     if (TestSendRemainingBytes == 0)
     {
-        release_lock(&buf);
+        if (!!p_Buf)
+        {
+            release_lock(p_Buf);
+        }
+    }
+
+    return (length > 0);
+}
+
+
+static bool Buf_FifoFill(buf_T * const p_buf, app_fifo_t * const p_fifo)
+{
+    if (!p_buf->is_sending)
+    {
+        return false;
+    }
+
+    uint32_t rem_length = 0;
+    rem_length =  p_buf->size * p_buf->recordSize - p_buf->read_ptr;
+    if (rem_length == 0)
+    {
+        // Error! Shouldn't get here.
+    }
+
+    uint32_t length = 0;
+    app_fifo_write(p_fifo, NULL, &length);
+
+    if (length > p_buf->read_cnt_remaining)
+    {
+        length = p_buf->read_cnt_remaining;
+    }
+    if (length > rem_length)
+    {
+        length = rem_length;
+    }
+
+    if (length > 0)
+    {
+        app_fifo_write(p_fifo, &((uint8_t *)p_buf->vals)[p_buf->read_ptr], &length);
+        p_buf->read_ptr += length;
+        if (p_buf->read_ptr >= p_buf->size * p_buf->recordSize)
+        {
+            p_buf->read_ptr = 0;
+        }
+        p_buf->read_cnt_remaining -= length;
+    }
+
+    if (p_buf->read_cnt_remaining == 0)
+    {
+        if (!!p_Buf)
+        {
+            release_lock(p_Buf);
+        }
     }
 
     return (length > 0);
@@ -338,54 +463,19 @@ bool TimedCircBuffer_FifoFill(app_fifo_t * const p_fifo)
         return TestDevice_FifoFill(p_fifo);
     }
 
-    if (!buf.is_sending)
+    if (!!p_Buf)
     {
-        return false;
+        return Buf_FifoFill(p_Buf, p_fifo);
     }
 
-    uint32_t rem_length = 0;
-    rem_length =  buf.size * buf.recordSize - buf.read_ptr;
-    if (rem_length == 0)
-    {
-        // Error! Shouldn't get here.
-    }
-
-    uint32_t length = 0;
-    app_fifo_write(p_fifo, NULL, &length);
-
-    if (length > buf.read_cnt_remaining)
-    {
-        length = buf.read_cnt_remaining;
-    }
-    if (length > rem_length)
-    {
-        length = rem_length;
-    }
-
-    if (length > 0)
-    {
-        app_fifo_write(p_fifo, &((uint8_t *)buf.vals)[buf.read_ptr], &length);
-        buf.read_ptr += length;
-        if (buf.read_ptr >= buf.size * buf.recordSize)
-        {
-            buf.read_ptr = 0;
-        }
-        buf.read_cnt_remaining -= length;
-    }
-
-    if (buf.read_cnt_remaining == 0)
-    {
-        release_lock(&buf);
-    }
-
-    return (length > 0);
+    return false;
 }
 
-static uint32_t length_of_buffer_in_time_steps(void)
+static uint32_t length_of_buffer_in_time_steps(buf_T * p_buf)
 {
     // Time to fill the buffer (125Hz samples) in units of 500Hz.
 
-    return ((buf.size) / 125) * 500;
+    return ((p_buf->size) / 125) * 500;
 }
 
 static bool lock_buffer_at_time_point(buf_T * p_buf, uint32_t time_point)
@@ -481,6 +571,11 @@ static bool lock_buffer_at_time_point(buf_T * p_buf, uint32_t time_point)
     return true;
 }
 
+static bool is_buffer_locked(buf_T * const p_buf, uint32_t data)
+{
+    return (p_buf->is_locked && p_buf->lock_time == data);
+}
+
 
 bool TimedCircBuffer_RxOperation_NoResponse(uint32_t code, uint32_t data)
 {
@@ -488,16 +583,23 @@ bool TimedCircBuffer_RxOperation_NoResponse(uint32_t code, uint32_t data)
     {
         case INSTRUCTION_CODE__LOCK:
             {
-                if (buf.is_locked && buf.lock_time == data)
+                if (!p_Buf)
                 {
-                    ; // ignore repeat requests
+                    PERIPHERAL_ERROR(PERIPHERAL_ERROR__LOCK_FAILED, data, 0xFEFEFEFE);
                 }
                 else
                 {
-                    bool res = lock_buffer_at_time_point(&buf, data);
-                    if (!res)
+                    if (is_buffer_locked(p_Buf, data))
                     {
-                        PERIPHERAL_ERROR(PERIPHERAL_ERROR__LOCK_FAILED, data, buf.time_base);
+                        ; // ignore repeat requests
+                    }
+                    else
+                    {
+                        bool res = lock_buffer_at_time_point(p_Buf, data);
+                        if (!res)
+                        {
+                            PERIPHERAL_ERROR(PERIPHERAL_ERROR__LOCK_FAILED, data, p_Buf->time_base);
+                        }
                     }
                 }
             }
@@ -548,7 +650,11 @@ bool TimedCircBuffer_RxOperation(uint32_t code, uint32_t data)
             break;
         case INSTRUCTION_CODE__LOCK:
             {
-                bool res = lock_buffer_at_time_point(&buf, data/*      (uint32_t) (ts_timestamp_get_ticks_u64(6) / 32000ULL)   */         );
+                bool res = false;
+                if (!!p_Buf)
+                {
+                    res = lock_buffer_at_time_point(p_Buf, data/*      (uint32_t) (ts_timestamp_get_ticks_u64(6) / 32000ULL)   */         );
+                }
 
                 uint32_t resp [2] = {INSTRUCTION_CODE__LOCK + 0x80000000UL, (uint32_t) res};
                 amts_queue_tx_data((uint8_t *) resp, 2*sizeof(uint32_t));
@@ -557,8 +663,14 @@ bool TimedCircBuffer_RxOperation(uint32_t code, uint32_t data)
         case INSTRUCTION_CODE__IS_LOCKED:
             {
                 (void) data;
+                uint32_t is_locked = 0;
+                if (!!p_Buf)
+                {
+                    is_locked = (uint32_t)p_Buf->is_locked;
+                }
 
-                uint32_t resp [2] = {INSTRUCTION_CODE__IS_LOCKED + 0x80000000UL, (uint32_t) buf.is_locked};
+
+                uint32_t resp [2] = {INSTRUCTION_CODE__IS_LOCKED + 0x80000000UL, is_locked};
                 amts_queue_tx_data((uint8_t *) resp, 2*sizeof(uint32_t));
             }
             break;

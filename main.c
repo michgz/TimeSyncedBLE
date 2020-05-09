@@ -144,7 +144,7 @@ APP_TIMER_DEF(led_flash_timer);
 
 #define SLEEP_TIMEOUT    0            /**< Timeout for peripheral to wait before sleeping -- currently 0 to indicate no timeout. */
 
-#define SCAN_TIMEOUT     APP_TIMER_TICKS(60000)                 /**< Time between doing scans  */
+#define SCAN_TIMEOUT     APP_TIMER_TICKS(30000)                 /**< Time between doing scans  */
 
 static void notif_timeout_handler(void * p_context);
 static void scan_timer_timeout_handler(void * p_context);
@@ -208,7 +208,7 @@ static void scan_start (void);
 #define DEVICE_ID_BYTE_0_ADDR   0x10000060
 #define DEVICE_ID_BYTE_0     (*((uint8_t const * const)DEVICE_ID_BYTE_0_ADDR))
 
-static const bool isCentral(void) {return (DEVICE_ID_BYTE_0 == 0x07);}
+static const bool isCentral(void) {return (DEVICE_ID_BYTE_0 != 0x07);}
 static const bool isPeripheral(void) {return !isCentral();}
 #endif
 #ifdef CENTRAL
@@ -451,7 +451,10 @@ static void services_init(void)
     //APP_ERROR_CHECK(err_code);
 
     // Initialise AMTS service
-    nrf_ble_amts_init(&m_amts, amts_evt_handler);
+    // A Central device needs a big TX FIFO in order to relay large data sets.
+    // The Peripheral does not, as it just uses data directly from its own
+    // buffer spaces.
+    nrf_ble_amts_init(&m_amts, amts_evt_handler, (isCentral() ? 16384 : 1024), 256);
 
     if (isCentral())
     {
@@ -841,12 +844,50 @@ static void scan_start(void)
     APP_ERROR_CHECK(err_code);
 }
 
+static unsigned int debug_pkt_count = 0;
+
+static bool DebugPacketFillFifo(app_fifo_t * const p_fifo)
+{
+    if (debug_pkt_count >= (10000/4))
+    {
+        return false;
+    }
+
+    uint32_t len;
+    app_fifo_write(p_fifo, NULL, &len);
+    while(len >= 4)
+    {
+        uint32_t len_2;
+
+        len_2 = 4;
+        app_fifo_write(p_fifo, (const uint8_t *)&debug_pkt_count, &len_2);
+        len -= 4;
+        debug_pkt_count ++;
+        if (debug_pkt_count >= (10000/4))
+        {
+            break;
+        }
+    }
+    return true;
+
+}
+
+static bool debug_packet_from_scan_timer_timeout(void)
+{
+    debug_pkt_count = 0;
+    StartSending(&DebugPacketFillFifo);
+    return true;
+}
+
 /**@brief Handler for timeout of the regular scan timer. */
 static void scan_timer_timeout_handler(void * p_context)
 {
     if (isCentral())
     {
-        if (trigger_from_scan_timer_timeout())
+        if (isDebugPacket() && debug_packet_from_scan_timer_timeout())
+        {
+        }
+        else if (trigger_from_scan_timer_timeout())
         {
             // Has triggered a reading. It will proceed from here.
             // Flash the LED if configured to.
@@ -1483,6 +1524,8 @@ static void notif_timeout_handler(void * p_context)
             {
                 uint32_t summ [4] = {0x8000000F, 0, time_taken, p_amt_c->bytes_rcvd_cnt};
 
+                summ[1] = amts_get_rejected_byte_count();
+
                 if (p_amt_c->conn_handle != BLE_CONN_HANDLE_INVALID)
                 {
                     // Get the ble_addr_t to summ[1:2]
@@ -1522,6 +1565,8 @@ static void amtc_evt_handler(nrf_ble_amtc_t * p_amt_c, nrf_ble_amtc_evt_t * p_ev
         case NRF_BLE_AMT_C_EVT_NOTIFICATIONS_SET:
         {
             notif_time = 4;
+
+            amts_clear_rejected_byte_count();
 
             err_code = app_timer_start(notif_timeout, APP_TIMER_TICKS(250), (void *) p_amt_c);
             APP_ERROR_CHECK(err_code);
@@ -1893,6 +1938,11 @@ static void main_task_function (void * pvParameter)
     {
         led_flash_seq_init();
     }
+
+    // Initialise the circular buffer with a fixed number of points. In the
+    // case of a central device, it does not need to store any points, and
+    // we wish to save memory to be used for relay buffering.
+    TimedCircBuffer_Init(isCentral() ? 0 : 2500);
 
     nrf_gpio_cfg_output(SEN_ENABLE);
     nrf_gpio_pin_set(SEN_ENABLE); // accelerometer power off

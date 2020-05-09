@@ -353,11 +353,13 @@ void nrf_ble_amts_on_ble_evt(ble_evt_t const * p_ble_evt, void * p_context);
  *
  * @param[out] p_ctx        Pointer to the AMTS structure.
  * @param[in]  evt_handler  Event handler.
+ * @param[in]  tx_fifo_size Size of TX FIFO (power of 2).
+ * @param[in]  rx_fifo_size Size of RX FIFO (power of 2).
  *
  * @retval     NRF_SUCCESS      Operation success.
  * @retval     NRF_ERROR_NULL   A parameter is NULL.
  */
-void nrf_ble_amts_init(nrf_ble_amts_t * p_ctx, amts_evt_handler_t evt_handler);
+void nrf_ble_amts_init(nrf_ble_amts_t * p_ctx, amts_evt_handler_t evt_handler, uint32_t tx_fifo_size, uint32_t rx_fifo_size);
 
 
 /**@brief   Function for sending AMT_BYTE_TRANSFER_CNT bytes via notifications.
@@ -398,6 +400,9 @@ extern void amts_queue_tx_data(uint8_t const * p_data, unsigned int n_data);
 #include "app_fifo.h"
 typedef bool (*FILL_FN)(app_fifo_t * const);
 extern void StartSending(FILL_FN fn);
+
+extern unsigned int amts_get_rejected_byte_count(void);
+extern void amts_clear_rejected_byte_count(void);
 
 #ifdef __cplusplus
 }

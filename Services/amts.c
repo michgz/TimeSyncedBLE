@@ -65,16 +65,30 @@ static void init_random(void);
 
 static app_fifo_t tx_fifo;
 static app_fifo_t rx_fifo;
-static uint8_t tx_fifo_buf[2048];
-static uint8_t rx_fifo_buf[256];
+//static uint8_t tx_fifo_buf[16384];
+//static uint8_t rx_fifo_buf[256];
 
-static void fifos_init(void)
+// Both sizes must be powers of 2.
+static void fifos_init(uint32_t tx_fifo_size, uint32_t rx_fifo_size)
 {
     ret_code_t err_code;
 
-    err_code = app_fifo_init(&tx_fifo, tx_fifo_buf, sizeof(tx_fifo_buf));
+    uint8_t * fifo_buf;
+
+    fifo_buf = malloc(tx_fifo_size);
+    if (!fifo_buf)
+    {
+        APP_ERROR_CHECK(NRF_ERROR_NO_MEM);
+    }
+    err_code = app_fifo_init(&tx_fifo, fifo_buf, tx_fifo_size);
     APP_ERROR_CHECK(err_code);
-    err_code = app_fifo_init(&rx_fifo, rx_fifo_buf, sizeof(rx_fifo_buf));
+
+    fifo_buf = malloc(rx_fifo_size);
+    if (!fifo_buf)
+    {
+        APP_ERROR_CHECK(NRF_ERROR_NO_MEM);
+    }
+    err_code = app_fifo_init(&rx_fifo, fifo_buf, rx_fifo_size);
     APP_ERROR_CHECK(err_code);
 }
 
@@ -82,18 +96,58 @@ static bool haveCurrentCmd = false;
 
 static nrf_ble_amts_t * static_ctx = NULL;
 
+static unsigned int rejectedBytes = 0;
+
+unsigned int amts_get_rejected_byte_count(void)
+{
+    unsigned int x = rejectedBytes;
+    rejectedBytes = 0;
+    return x;
+}
+
+void amts_clear_rejected_byte_count(void)
+{
+    rejectedBytes = 0;
+}
+
 static FILL_FN currentCmdFn;
 
 void amts_queue_tx_data(uint8_t const * p_data, unsigned int n_data)
 {
-    if (static_ctx && !static_ctx->busy)
+    if (static_ctx)
     {
-        uint32_t n_data_cpy = n_data;
-        if (NRF_SUCCESS == app_fifo_write(&tx_fifo, p_data, &n_data_cpy))
+        if (!static_ctx->busy)
         {
-            currentCmdFn = NULL; // illegal function pointer. Will crash if called!
-            haveCurrentCmd = true;
-            nrf_ble_amts_notif_spam(static_ctx);
+            uint32_t n_data_cpy = n_data;
+            if (NRF_SUCCESS == app_fifo_write(&tx_fifo, p_data, &n_data_cpy))
+            {
+                if (n_data_cpy < n_data)
+                {
+                    rejectedBytes += (n_data - n_data_cpy);
+                }
+                currentCmdFn = NULL; // illegal function pointer. Will crash if called!
+                haveCurrentCmd = true;
+                nrf_ble_amts_notif_spam(static_ctx);
+            }
+            else
+            {
+                rejectedBytes += n_data;
+            }
+        }
+        else
+        {
+            uint32_t n_data_cpy = n_data;
+            if (NRF_SUCCESS == app_fifo_write(&tx_fifo, p_data, &n_data_cpy))
+            {
+                if (n_data_cpy < n_data)
+                {
+                    rejectedBytes += (n_data - n_data_cpy);
+                }
+            }
+            else
+            {
+                rejectedBytes += n_data;
+            }
         }
     }
 
@@ -314,14 +368,14 @@ static void amts_data_handler(nrf_ble_amts_evt_t * p_evt)
 
 
 
-void nrf_ble_amts_init(nrf_ble_amts_t * p_ctx, amts_evt_handler_t evt_handler)
+void nrf_ble_amts_init(nrf_ble_amts_t * p_ctx, amts_evt_handler_t evt_handler, uint32_t tx_fifo_size, uint32_t rx_fifo_size)
 {
     ret_code_t    err_code;
     uint16_t      service_handle;
     ble_uuid_t    ble_uuid;
     ble_uuid128_t base_uuid = {SERVICE_UUID_BASE};
 
-    fifos_init();
+    fifos_init(tx_fifo_size, rx_fifo_size);
 
     static_ctx = p_ctx;
 
@@ -441,6 +495,13 @@ static void finished(nrf_ble_amts_t * p_ctx)
 }
 
 
+
+static volatile uint32_t used_1 = 0;
+static volatile uint32_t used_2 = 0;
+static volatile uint32_t used_3 = 0;
+
+
+
 static void char_notification_send(nrf_ble_amts_t * p_ctx)
 {
     static uint8_t     data[256];
@@ -501,6 +562,9 @@ static void char_notification_send(nrf_ble_amts_t * p_ctx)
 
             available = payload_len;
             app_fifo_read(&tx_fifo, data, &available);
+
+            used_1 += available;
+
         }
 
         err_code = sd_ble_gatts_hvx(p_ctx->conn_handle, &hvx_param);
@@ -514,7 +578,12 @@ static void char_notification_send(nrf_ble_amts_t * p_ctx)
         }
         else if (err_code != NRF_SUCCESS)
         {
+            used_3 += 1;
             NRF_LOG_ERROR("sd_ble_gatts_hvx() failed: 0x%x", err_code);
+        }
+        else
+        {
+            used_2 += payload_len;
         }
 
         waiting_len = 0;
