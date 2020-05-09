@@ -145,7 +145,7 @@ APP_TIMER_DEF(led_flash_timer);
 
 #define SLEEP_TIMEOUT    0            /**< Timeout for peripheral to wait before sleeping -- currently 0 to indicate no timeout. */
 
-#define SCAN_TIMEOUT     APP_TIMER_TICKS(30000)                 /**< Time between doing scans  */
+#define SCAN_TIMEOUT     APP_TIMER_TICKS(120000)                 /**< Time between doing scans  */
 
 static void notif_timeout_handler(void * p_context);
 static void scan_timer_timeout_handler(void * p_context);
@@ -598,6 +598,10 @@ void trigger(uint32_t size)
             uint32_t data [3] = {0x80000022, root_size, (uint32_t) (ts_timestamp_get_ticks_u64(6) / 32000ULL)  };
 
             amts_queue_tx_data((uint8_t const *) &data, 3*sizeof(uint32_t));
+        }
+        else if (!isLedOnBroadcast() && LeafListCount() > 0)
+        {
+            doTrigger();
         }
 
     }
