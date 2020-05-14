@@ -586,12 +586,23 @@ static void check_manu_data(char const * x, int len)
 
 }
 
+static inline bool uploadSimpleTrigger(void)
+{
+    if (!isUploadTriggerSize())
+    {
+        return false;
+    }
+    
+    return ((cfgs.value_3 & CONFIG_3_SIMPLE_TRIGGER_MASK) == CONFIG_3_SIMPLE_TRIGGER_MASK);
+}
+
+
 void trigger(uint32_t size)
 {
     if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
     {
 
-        if (isUploadTriggerSize())
+        if (uploadSimpleTrigger())
         {
             uint32_t root_size = (uint32_t) sqrtf((float) size);
 
@@ -722,6 +733,21 @@ static void reading_timeout_handler(void * p_context)
     do_a_connection();
 }
 
+static inline bool mustUploadLeafList(void)
+{
+    return (isCentral() && ((cfgs.value_3 & CONFIG_3_UPLOAD_LEAF_LIST_MASK) == CONFIG_3_UPLOAD_LEAF_LIST_MASK));
+}
+
+static bool LeafListFillFn(app_fifo_t * const p_fifo)
+{
+    return false;
+}
+
+static void upload_leaf_list(void)
+{
+    StartSending(&LeafListFillFn);
+}
+
 /**@brief Function for handling Scanning Module events.
  */
 static void scan_evt_handler(scan_evt_t const * p_scan_evt)
@@ -756,11 +782,12 @@ static void scan_evt_handler(scan_evt_t const * p_scan_evt)
             NRF_LOG_INFO("Scan timed out.");
             //scan_start();
 
-            // Scan completed. Now start beaconing.
-#if 0
-            upload_leaf_list();
-#endif
+             if (isCentral() && m_conn_handle != BLE_CONN_HANDLE_INVALID && mustUploadLeafList())
+             {
+                upload_leaf_list();
+             }
 
+            // Scan completed. Now start beaconing.
 
             // (void)doConnectionAndDownload();
 

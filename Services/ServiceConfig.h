@@ -60,13 +60,17 @@ typedef struct config_service_t
     ble_srv_error_handler_t    error_handler;           //!< Function to be called in case of an error.
     ble_gatts_char_handles_t   value_1_handles;    //!< Handles related to the configuration value characteristic.
     ble_gatts_char_handles_t   value_2_handles;    //!< Handles related to the configuration value characteristic.
+    ble_gatts_char_handles_t   value_3_handles;    //!< Handles related to the configuration value characteristic.
 
     // Now the current values of the config items.
     uint8_t     value_1;
     uint32_t    value_2;
+    uint8_t     value_3;
 
 } config_service_t;
 
+#define CONFIG_3_SIMPLE_TRIGGER_MASK 0x02
+#define CONFIG_3_UPLOAD_LEAF_LIST_MASK 0x08
 
 extern uint16_t service_cfg_on_ble_evt(config_service_t *p_cfgs, ble_evt_t const * p_evt);
 

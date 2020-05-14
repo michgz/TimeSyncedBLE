@@ -246,6 +246,7 @@ void config_init(config_service_t * p_ctx)
 
     p_ctx->value_1 = (uint8_t)new_value_1;
     p_ctx->value_2 = new_value_2;
+    p_ctx->value_3 = 0;   // Zero value on start-up.
 
 }
 
@@ -323,6 +324,23 @@ ret_code_t service_config_init(service_config_init_t * p_cfgs_init, config_servi
     err_code = characteristic_add(p_ctx->service_handle,
                               &add_char_params,
                               &p_ctx->value_2_handles);
+    VERIFY_SUCCESS(err_code);
+
+    //Add characteristic value_3 (the mode parameter)
+    memset(&add_char_params, 0, sizeof(add_char_params));
+    add_char_params.uuid             = BLE_UUID_CONFIG_CHARACTERISTIC_3;
+    add_char_params.uuid_type        = p_ctx->uuid_type;
+    add_char_params.max_len          = sizeof(p_ctx->value_3);
+    add_char_params.init_len         = sizeof(p_ctx->value_3);
+    add_char_params.char_props.write = true;
+    add_char_params.char_props.read  = true;
+    add_char_params.read_access      = SEC_OPEN;    
+    add_char_params.write_access     = SEC_OPEN;
+    add_char_params.p_init_value     = (void *) &p_ctx->value_3;
+
+    err_code = characteristic_add(p_ctx->service_handle,
+                              &add_char_params,
+                              &p_ctx->value_3_handles);
     VERIFY_SUCCESS(err_code);
 
     if (p_cfgs_init->p_cfgs_ctx != NULL)

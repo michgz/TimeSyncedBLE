@@ -16,7 +16,8 @@
 // Config service characteristics
 #define BLE_UUID_CONFIG_SERVICE         0x000B
 #define BLE_UUID_CONFIG_CHARACTERISTIC_1    0x000C
-#define BLE_UUID_CONFIG_CHARACTERISTIC_2    0x000D                      
+#define BLE_UUID_CONFIG_CHARACTERISTIC_2    0x000D
+#define BLE_UUID_CONFIG_CHARACTERISTIC_3    0x000E
 
 // AMTS characteristics
 #define BLE_UUID_NUS_TX_CHARACTERISTIC 0x0003               /**< The UUID of the TX Characteristic. */

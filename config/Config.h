@@ -37,7 +37,8 @@
 // Send a packet size 10000 bytes with increasing values to detect missing values.
 #define isDebugPacket()  (false)
 
-// On detecting a trigger, don't do anything other than inform the upstream
+// On detecting a trigger, don't do anything other than inform the upstream. This is conditioned
+// on a config value 3 bit field.
 #define isUploadTriggerSize()   (true)
 
 #endif // CONFIG_H__
