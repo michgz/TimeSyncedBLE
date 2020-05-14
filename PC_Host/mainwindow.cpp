@@ -577,6 +577,15 @@ void Worker::deviceConnected(void)
     }
 }
 
+void Worker::doDisconnect(void)
+{
+    if (!!qctl)
+    {
+        disconnect(qctl, &QLowEnergyController::disconnected, this, &Worker::deviceDisconnected);
+        qctl->disconnectFromDevice();
+    }
+}
+
 
 void MainWindow::on_ble_error(QLowEnergyController::Error newError)
 {
@@ -759,6 +768,8 @@ void MainWindow::deviceDiscovered(const QBluetoothDeviceInfo &device)
             connect(wrkr, &Worker::gotTrace, this, &MainWindow::processBuffer_simple);
 
             connect(ui->connectButton, &QPushButton::clicked, wrkr, &Worker::startIt);
+            connect(ui->disconnectButton, &QPushButton::clicked, wrkr, &Worker::doDisconnect);
+
         }
     }
 }

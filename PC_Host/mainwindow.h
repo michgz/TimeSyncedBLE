@@ -87,6 +87,7 @@ public slots:
     void deviceConnected(void);
     void deviceDisconnected(void);
     void startIt(void);
+    void doDisconnect(void);
     void characteristicChanged(QLowEnergyCharacteristic,QByteArray);
     void tryWriting(void);
 
