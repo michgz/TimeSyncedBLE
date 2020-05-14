@@ -745,7 +745,8 @@ static bool LeafListFillFn(app_fifo_t * const p_fifo)
 
 static void upload_leaf_list(void)
 {
-    StartSending(&LeafListFillFn);
+    ScanListClearReading();
+    StartSending(&ScanList_FifoFill);
 }
 
 /**@brief Function for handling Scanning Module events.

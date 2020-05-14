@@ -11,15 +11,16 @@
 #define LEAF_LIST_N    (5)
 typedef struct LEAF_tag
 {
-    ble_gap_addr_t gap_addr;
-    ble_gap_scan_params_t scan_params;
+    ble_gap_addr_t          gap_addr;
+    int8_t                  rssi;
+    ble_gap_scan_params_t   scan_params;
 
 } LEAF_T;
 
 static LEAF_T  leaf_list[LEAF_LIST_N];
 static unsigned int  leaf_list_ptr = 0U;
 
-static void add_leaf_list(ble_gap_addr_t * gap_addr, ble_gap_scan_params_t const * scan_params)
+static void add_leaf_list(ble_gap_addr_t * gap_addr, ble_gap_scan_params_t const * scan_params, int8_t rssi)
 {
     // Check if already in the list
     int i;
@@ -37,6 +38,7 @@ static void add_leaf_list(ble_gap_addr_t * gap_addr, ble_gap_scan_params_t const
     {
         memcpy(&leaf_list[leaf_list_ptr].gap_addr, gap_addr, sizeof(ble_gap_addr_t));
         memcpy(&leaf_list[leaf_list_ptr].scan_params, scan_params, sizeof(ble_gap_scan_params_t));
+        leaf_list[leaf_list_ptr].rssi = rssi;
         leaf_list_ptr ++;
     }
 }
@@ -58,7 +60,7 @@ void on_scan_list_scan_evt(scan_evt_t const * p_scan_evt)
             ble_gap_scan_params_t    const * p_scan_param = 
                            p_scan_evt->p_scan_params;
 
-            add_leaf_list((ble_gap_addr_t *) &p_adv->peer_addr, p_scan_param);
+            add_leaf_list((ble_gap_addr_t *) &p_adv->peer_addr, p_scan_param, p_adv->rssi);
 
         } break;
     }
@@ -120,17 +122,24 @@ bool ScanList_FifoFill(app_fifo_t * const p_fifo)
             available -= len;
             read_ptr ++;
         }
-
-        if (read_ptr > leaf_list_ptr)
+        else
         {
-            return true;  // Finished
+            if (read_ptr > leaf_list_ptr)
+            {
+                return true;  // Finished
+            }
+
+            uint8_t tmp [8];
+            memset(tmp, 0, 8);
+            memcpy(&tmp[0], (uint8_t * const)&leaf_list[read_ptr-1].gap_addr.addr, BLE_GAP_ADDR_LEN);
+            tmp[7] = (uint8_t) leaf_list[read_ptr-1].rssi;
+
+            len = 8;
+            app_fifo_write(p_fifo, (uint8_t * const)&leaf_list[read_ptr-1].gap_addr, &len);
+            available -= len;
+
+            read_ptr ++;
         }
-
-        len = 8;
-        app_fifo_write(p_fifo, (uint8_t * const)&leaf_list[read_ptr-1].gap_addr, &len);
-        available -= len;
-
-        read_ptr ++;
     }
     return true;
 }
