@@ -176,6 +176,7 @@ enum
     INSTRUCTION_CODE__LOCK = 0x0A,
     INSTRUCTION_CODE__IS_LOCKED = 0x0B,
     INSTRUCTION_CODE__READ_OUT = 0x0E,
+    INSTRUCTION_CODE__TEST = 0x21,
     INSTRUCTION_CODE__QUERY_IS_SYNCED = 0x11,
     INSTRUCTION_CODE__QUERY_SYNC_DEBUGS = 0x13,
     INSTRUCTION_CODE__QUERY_CURRENT_TIME = 0x16,
@@ -348,9 +349,11 @@ static void release_lock(buf_T * p_buf)
 
 static unsigned int TestSendRemainingBytes = 0;
 
+static bool testLock = false;   // True if pretending to be locked, while sending debug values.
+
 static void TimedCircBuffer_StartSending(void)
 {
-    if (isUseSyncTimer() || !isTestDevice())
+    if (!testLock && (isUseSyncTimer() || !isTestDevice()))
     {
         // In this case, we require the sync timer to have worked, i.e. lock has been achieved.
         if (!p_Buf || ! p_Buf->is_locked)
@@ -361,7 +364,7 @@ static void TimedCircBuffer_StartSending(void)
     }
 
     TestSendRemainingBytes = 10000;  // Should be calculated from the size of the lock area.
-    if (isTestDevice())
+    if (testLock)
     {
         srand( *((unsigned int *)0x10000080 ) );   // FICR "Encryption Root"
     }
@@ -511,9 +514,14 @@ bool TimedCircBuffer_FifoFill(app_fifo_t * const p_fifo)
         return Error_FifoFill(p_fifo);
     }
 
-    if (isTestDevice())
+    if (testLock)
     {
-        return TestDevice_FifoFill(p_fifo);
+        bool res = TestDevice_FifoFill(p_fifo);
+        if (!res)
+        {
+            testLock = false; // fininshed
+        }
+        return res;
     }
 
     if (!!p_Buf)
@@ -634,6 +642,26 @@ bool TimedCircBuffer_RxOperation_NoResponse(uint32_t code, uint32_t data)
 {
     switch (code)
     {
+        case INSTRUCTION_CODE__TEST:
+            {
+                if (!p_Buf)
+                {
+                    PERIPHERAL_ERROR(PERIPHERAL_ERROR__LOCK_FAILED, data, 0xFEFEFEFE);
+                }
+                else
+                {
+                    if (is_buffer_locked(p_Buf, data))
+                    {
+                        ; // the buffer is locked for real, don't do a test lock
+                    }
+                    else
+                    {
+                        testLock = true;
+                    }
+                }
+            }
+            break;
+
         case INSTRUCTION_CODE__LOCK:
             {
                 if (!p_Buf)
@@ -646,12 +674,20 @@ bool TimedCircBuffer_RxOperation_NoResponse(uint32_t code, uint32_t data)
                     {
                         ; // ignore repeat requests
                     }
+                    else if (testLock)
+                    {
+                        ; // test lock in progress
+                    }
                     else
                     {
                         bool res = lock_buffer_at_time_point(p_Buf, data);
                         if (!res)
                         {
                             PERIPHERAL_ERROR(PERIPHERAL_ERROR__LOCK_FAILED, data, p_Buf->time_base);
+                        }
+                        if (isTestDevice())
+                        {
+                            testLock = true;
                         }
                     }
                 }
