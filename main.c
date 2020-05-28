@@ -570,16 +570,20 @@ static void service_error_handler(uint32_t nrf_error)
 static void check_manu_data(char const * x, int len)
 {
     // Check if manufacturer data meets the expected format.
-    if (len >= 6)
+    if (len >= 2 + /*sizeof(BroadcastData_T)*/ 5)
     {
         ble_advdata_manuf_data_t const * manu = (ble_advdata_manuf_data_t const *) x;
         if (manu->company_identifier == MY_MANUFACTURER_ID)
         {
             if (isPeripheral())
             {
-                // Pretend like we've received a lock instruction INSTRUCTION_CODE__LOCK
-                const uint32_t INSTRUCTION_CODE__LOCK = 0x0A;
-                (void) TimedCircBuffer_RxOperation_NoResponse(INSTRUCTION_CODE__LOCK, *((uint32_t const *) &x[2]));
+                const BroadcastData_T * receivedData = (BroadcastData_T const *) &x[2];
+                if (receivedData->type == BroadcastType_RequestLock)
+                {
+                    // Pretend like we've received a lock instruction INSTRUCTION_CODE__LOCK
+                    const uint32_t INSTRUCTION_CODE__LOCK = 0x0A;
+                    (void) TimedCircBuffer_RxOperation_NoResponse(INSTRUCTION_CODE__LOCK, *((uint32_t const *)receivedData->data));
+                }
             }
         }
     }
@@ -1143,12 +1147,12 @@ static void on_adv_evt_broadcast(ble_adv_evt_t ble_adv_evt)
     }
 }
 
-
-static uint8_t BroadcastData[4] = {0xDE, 0xAD, 0xBE, 0xEF};
+static BroadcastData_T BroadcastData = {{0xDE, 0xAD, 0xBE, 0xEF}, BroadcastType_Invalid, 0};
 
 static void BroadcastAdvertising_SetData(uint32_t x)
 {
-    memcpy(BroadcastData, (uint8_t *) &x, 4);
+    memcpy(BroadcastData.data, (uint8_t *) &x, 4);
+    BroadcastData.type = BroadcastType_RequestLock;
 }
 
 static ret_code_t BroadcastAdvertising_SetUp(ble_advertising_t * const p_advertising, bool isBroadcast)
@@ -1183,8 +1187,8 @@ static ret_code_t BroadcastAdvertising_SetUp(ble_advertising_t * const p_adverti
 
         ble_advdata_manuf_data_t manu_data;
         manu_data.company_identifier = MY_MANUFACTURER_ID;
-        manu_data.data.size = 4;
-        manu_data.data.p_data = (uint8_t *) BroadcastData;
+        manu_data.data.size = sizeof(BroadcastData_T);
+        manu_data.data.p_data = (uint8_t *) &BroadcastData;
         init.advdata.p_manuf_specific_data = &manu_data;
 
         init.config.ble_adv_fast_enabled  = true;
