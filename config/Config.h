@@ -24,11 +24,9 @@
 // For central, flashes its LED when it sends a broadcast message.
 #define isLedOnBroadcast()   (false)
 
-
-
-// In the central case, upload results of each scan if connected upstream
-#define isUploadScanResults()    (false)
-
+// For central, send triggers for debugging purposes every so often after a scan.
+//  Typically, would be 1 in 10.
+#define isSendOccasionalDebugTriggers()  (false)
 
 // In the central case, transmit a time sync message at regular intervals. In the peripheral case,
 // be sensitive to time sync messages.

@@ -295,12 +295,12 @@ static void led_flash_timeout_handler(void * p_context)
 }
 
 static void reading_timeout_handler(void * p_context);
-static void BroadcastAdvertising_SetData(uint32_t);
+static void BroadcastAdvertising_SetData(uint32_t, enum BroadcastTypes);
 
 static bool m_bb = false;
 
 // Supported by Central only. Trigger a reading in all leaf devices.
-void doTrigger(void)
+void doTrigger(enum BroadcastTypes ty)
 {
     if (!isCentral())
     {
@@ -315,7 +315,7 @@ void doTrigger(void)
 
         if (isUseSyncTimer())
         {
-            BroadcastAdvertising_SetData(  (uint32_t) (ts_timestamp_get_ticks_u64(6) / 32000ULL)  );
+            BroadcastAdvertising_SetData(  (uint32_t) (ts_timestamp_get_ticks_u64(6) / 32000ULL)  , ty  );
         }
 
         err_code = BroadcastAdvertising_SetUp(&m_advertising, true);
@@ -616,7 +616,7 @@ void trigger(uint32_t size)
         }
         else if (!isLedOnBroadcast() && LeafListCount() > 0)
         {
-            doTrigger();
+            doTrigger(BroadcastType_RequestLock);
         }
 
     }
@@ -627,24 +627,22 @@ void trigger(uint32_t size)
 /** Returns true if triggered.   */
 static bool trigger_from_scan_timer_timeout(void)
 {
-    if (isLedOnBroadcast() && m_conn_handle != BLE_CONN_HANDLE_INVALID && LeafListCount() > 0)
+    if (isSendOccasionalDebugTriggers() && m_conn_handle != BLE_CONN_HANDLE_INVALID && LeafListCount() > 0)
     {
         bool debugCase = false;
 
-        // Discard a few random numbers in case there are some stuck values at the beginning
-        (void)rand();
-        (void)rand();
-        (void)rand();
+        const int countdownTop = 10;
+        static int countdown = 5;   // Start half-way, so we don't have to wait so long.
 
-        int r = rand();
-
-        if ((r&7) <= 5)
+        countdown ++;
+        if (countdown >= countdownTop)
         {
-            // This is a debug condition. In 87.5% percent of scans, doesn't connect just uploads scan results
+            countdown = 0;
             debugCase = true;
+
         }
 
-        if (!debugCase)
+        if (debugCase)
         {
             // Need to have advertising available to us.
             if (m_advertising.adv_mode_current != BLE_ADV_MODE_IDLE)
@@ -652,18 +650,8 @@ static bool trigger_from_scan_timer_timeout(void)
                 return false;
             }
 
-            doTrigger();
+            doTrigger(BroadcastType_Debug);
             return true;
-        }
-        else
-        {
-            if (debugCase || isUploadScanResults())
-            {
-                ScanListClearReading();
-                StartSending(&ScanList_FifoFill);
-            }
-
-            return false;
         }
 
     }
@@ -1149,10 +1137,10 @@ static void on_adv_evt_broadcast(ble_adv_evt_t ble_adv_evt)
 
 static BroadcastData_T BroadcastData = {{0xDE, 0xAD, 0xBE, 0xEF}, BroadcastType_Invalid, 0};
 
-static void BroadcastAdvertising_SetData(uint32_t x)
+static void BroadcastAdvertising_SetData(uint32_t x, enum BroadcastTypes ty)
 {
     memcpy(BroadcastData.data, (uint8_t *) &x, 4);
-    BroadcastData.type = BroadcastType_RequestLock;
+    BroadcastData.type = ty;
 }
 
 static ret_code_t BroadcastAdvertising_SetUp(ble_advertising_t * const p_advertising, bool isBroadcast)

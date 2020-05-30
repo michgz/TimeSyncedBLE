@@ -15,6 +15,7 @@ enum BroadcastTypes
 {
     BroadcastType_Invalid = 0x00,
     BroadcastType_RequestLock = 0x01,
+    BroadcastType_Debug = 0x02
 };
 
 typedef struct __attribute(( packed )) BroadcastData_tag

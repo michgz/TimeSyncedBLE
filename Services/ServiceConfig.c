@@ -246,7 +246,7 @@ void config_init(config_service_t * p_ctx)
 
     p_ctx->value_1 = (uint8_t)new_value_1;
     p_ctx->value_2 = new_value_2;
-    p_ctx->value_3 = 0;   // Zero value on start-up.
+    p_ctx->value_3 = CONFIG_3_DEFAULT;
 
 }
 

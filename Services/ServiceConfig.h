@@ -72,6 +72,8 @@ typedef struct config_service_t
 #define CONFIG_3_SIMPLE_TRIGGER_MASK 0x02
 #define CONFIG_3_UPLOAD_LEAF_LIST_MASK 0x08
 
+#define CONFIG_3_DEFAULT     (CONFIG_3_SIMPLE_TRIGGER_MASK|CONFIG_3_UPLOAD_LEAF_LIST_MASK)
+
 extern uint16_t service_cfg_on_ble_evt(config_service_t *p_cfgs, ble_evt_t const * p_evt);
 
 extern ret_code_t service_config_init(service_config_init_t * p_cfgs_init, config_service_t * p_ctx);

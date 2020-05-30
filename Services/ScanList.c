@@ -102,7 +102,7 @@ bool ScanList_FifoFill(app_fifo_t * const p_fifo)
         APP_ERROR_CHECK(NRF_ERROR_NULL);
     }
 
-    if (read_ptr > leaf_list_ptr)
+    if (read_ptr != 0 && read_ptr > leaf_list_ptr)
     {
         return false;  // Finished
     }
