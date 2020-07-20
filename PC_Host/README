@@ -1,1 +1,1 @@
-Uses Qt 5.14
+Uses Python >=3.0 + Bleak 0.7.1

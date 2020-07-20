@@ -21,6 +21,6 @@ Several sources of code have been borrowed:
 
 Embedded code for the nRF52 units uses the 16.0.0 version of the nRF52 (download from https://www.nordicsemi.com/Software-and-tools/Software/nRF5-SDK/Download). It should be compilable by SES. Note that the SDK is not included in this repository -- it must be downloaded and copied in. There is an empty directory there for it.
 
-PC host code uses Qt 5 (developed on 5.14). It should work independently of hardware - for development, Ubuntu 18.04 was used with Bluetooth LE adaptor Adafruit #1327.
+PC host code uses Python 3.6 + Bleak 0.7.1. It should work independently of hardware - for development, Ubuntu 18.04 was used with Bluetooth LE adaptor Adafruit #1327.
 
 
