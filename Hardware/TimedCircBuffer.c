@@ -642,22 +642,35 @@ bool TimedCircBuffer_RxOperation_NoResponse(uint32_t code, uint32_t data)
 {
     switch (code)
     {
+        case INSTRUCTION_CODE__READ_OUT:
+            {
+                TimedCircBuffer_StartSending();
+            }
+            break;
+
+        default:
+            break;
+    }
+
+    return true;
+}
+
+bool TimedCircBuffer_RxOperation(uint32_t code, uint32_t data)
+{
+    switch (code)
+    {
+
         case INSTRUCTION_CODE__TEST:
             {
-                if (!p_Buf)
+                if (!!p_Buf && is_buffer_locked(p_Buf, data))
                 {
-                    PERIPHERAL_ERROR(PERIPHERAL_ERROR__LOCK_FAILED, data, 0xFEFEFEFE);
+                    ; // the buffer is locked for real, don't do a test lock
                 }
                 else
                 {
-                    if (is_buffer_locked(p_Buf, data))
-                    {
-                        ; // the buffer is locked for real, don't do a test lock
-                    }
-                    else
-                    {
-                        testLock = true;
-                    }
+                    // Don't worry if p_Buf is zero. That may simply indicate a central device --
+                    // they should also be responsive to test reads.
+                    testLock = true;
                 }
             }
             break;
@@ -694,23 +707,6 @@ bool TimedCircBuffer_RxOperation_NoResponse(uint32_t code, uint32_t data)
             }
             break;
 
-        case INSTRUCTION_CODE__READ_OUT:
-            {
-                TimedCircBuffer_StartSending();
-            }
-            break;
-
-        default:
-            break;
-    }
-
-    return true;
-}
-
-bool TimedCircBuffer_RxOperation(uint32_t code, uint32_t data)
-{
-    switch (code)
-    {
         case INSTRUCTION_CODE__QUERY_IS_SYNCED:
             {
                 (void) data;
