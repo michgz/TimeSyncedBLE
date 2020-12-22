@@ -733,6 +733,7 @@ bool TimedCircBuffer_RxOperation(uint32_t code, uint32_t data)
                 amts_queue_tx_data((uint8_t *) resp, 2*sizeof(uint32_t));
             }
             break;
+#if 0   // What was this??
         case INSTRUCTION_CODE__LOCK:
             {
                 bool res = false;
@@ -745,6 +746,7 @@ bool TimedCircBuffer_RxOperation(uint32_t code, uint32_t data)
                 amts_queue_tx_data((uint8_t *) resp, 2*sizeof(uint32_t));
             }
             break;
+#endif // 0
         case INSTRUCTION_CODE__IS_LOCKED:
             {
                 (void) data;

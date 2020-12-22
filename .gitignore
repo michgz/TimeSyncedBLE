@@ -50,3 +50,10 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# Specific to the TimeSyncedBLE project
+*.emSession
+nRF5_SDK_16.0.0_98a08e2/*/*
+nRF5_SDK_16.0.0_98a08e2/license.txt
+Output/*
+
