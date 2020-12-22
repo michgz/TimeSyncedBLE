@@ -46,7 +46,7 @@ uint16_t service_cfg_on_ble_evt(config_service_t *p_cfgs,
                 ret_code_t err_code;
                 ble_gatts_evt_write_t const * p_write = &p_ble_evt->evt.gatts_evt.params.write;
 
-                if (p_write->handle == p_cfgs->value_1_handles.value_handle & p_write->len >= 1 && p_write->op != BLE_GATTS_OP_INVALID)
+                if (p_write->handle == p_cfgs->value_1_handles.value_handle & p_write->len >= CONFIG_1_LEN && p_write->op != BLE_GATTS_OP_INVALID)
                 {
                     static uint32_t new_value = 0U; // Static because fds_...() functions are queued
                     ((uint32_t *)&new_value)[0] = p_write->data[0];
@@ -83,7 +83,7 @@ uint16_t service_cfg_on_ble_evt(config_service_t *p_cfgs,
                         APP_ERROR_CHECK(err_code);
                     }
                 }
-                else if (p_write->handle == p_cfgs->value_2_handles.value_handle & p_write->len >= 4 && p_write->op != BLE_GATTS_OP_INVALID)
+                else if (p_write->handle == p_cfgs->value_2_handles.value_handle & p_write->len >= CONFIG_2_LEN && p_write->op != BLE_GATTS_OP_INVALID)
                 {
                     static uint32_t new_value = 0U;   // Static because fds_...() functions are queued.
                     ((uint32_t *)&new_value)[0] = p_write->data[0];
@@ -206,7 +206,11 @@ void config_init(config_service_t * p_ctx)
         err_code = fds_record_close(&desc);
         APP_ERROR_CHECK(err_code);
     }
-    else if (err_code != FDS_ERR_NOT_FOUND)
+    else if (err_code == FDS_ERR_NOT_FOUND)
+    {
+        new_value_1 = CONFIG_1_DEFAULT;
+    }
+    else
     {
         APP_ERROR_CHECK(err_code);
     }
@@ -238,7 +242,11 @@ void config_init(config_service_t * p_ctx)
         err_code = fds_record_close(&desc);
         APP_ERROR_CHECK(err_code);
     }
-    else if (err_code != FDS_ERR_NOT_FOUND)
+    else if (err_code == FDS_ERR_NOT_FOUND)
+    {
+        new_value_2 = CONFIG_2_DEFAULT;
+    }
+    else
     {
         APP_ERROR_CHECK(err_code);
     }

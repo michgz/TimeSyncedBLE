@@ -209,7 +209,7 @@ static void scan_start (void);
 #define DEVICE_ID_BYTE_0_ADDR   0x10000060
 #define DEVICE_ID_BYTE_0     (*((uint8_t const * const)DEVICE_ID_BYTE_0_ADDR))
 
-static const bool isCentral(void) {return (DEVICE_ID_BYTE_0 == 0x07);}
+static const bool isCentral(void) {return (DEVICE_ID_BYTE_0 == 0xE3);}
 static const bool isPeripheral(void) {return !isCentral();}
 #endif
 #ifdef CENTRAL
@@ -297,9 +297,7 @@ static void led_flash_timeout_handler(void * p_context)
 static void reading_timeout_handler(void * p_context);
 static void BroadcastAdvertising_SetData(uint32_t, enum BroadcastTypes);
 
-static bool m_bb = false;
-
-// Supported by Central only. Trigger a reading in all leaf devices.
+/** Supported by Central only. Trigger a reading in all leaf devices.    */
 void doTrigger(enum BroadcastTypes ty)
 {
     if (!isCentral())
@@ -590,6 +588,8 @@ static void check_manu_data(char const * x, int len)
 
 }
 
+/** Returns true if trigger magnitude is to be uploaded. If true, then all other operation will not
+ *  proceed. Therefore should normally be false.   */
 static inline bool uploadSimpleTrigger(void)
 {
     if (!isUploadTriggerSize())
@@ -600,12 +600,17 @@ static inline bool uploadSimpleTrigger(void)
     return ((cfgs.value_3 & CONFIG_3_SIMPLE_TRIGGER_MASK) == CONFIG_3_SIMPLE_TRIGGER_MASK);
 }
 
-
+/** Called to indicate a trigger event, and to kick-start the response to it. This only
+ *  happens in a Central device.
+ *
+ *  "size" indicates the square magnitude of the trigger event. If the trigger is an
+ *  acceleration event (normally that will be the case), this will be in units of m^2 s^-4.    */
 void trigger(uint32_t size)
 {
     if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
     {
 
+        /* If simple trigger upload is selected, upload the magnitude and take no other action.  */
         if (uploadSimpleTrigger())
         {
             uint32_t root_size = (uint32_t) sqrtf((float) size);
@@ -614,6 +619,8 @@ void trigger(uint32_t size)
 
             amts_queue_tx_data((uint8_t const *) &data, 3*sizeof(uint32_t));
         }
+
+        /* Otherwise, send to leaf nodes if there are any.   */
         else if (!isLedOnBroadcast() && LeafListCount() > 0)
         {
             doTrigger(BroadcastType_RequestLock);
@@ -725,14 +732,11 @@ static void reading_timeout_handler(void * p_context)
     do_a_connection();
 }
 
+/** Returns true if should upload the leaf list to the host after completing each scan. For debug
+ *  only, will normally be false.     */
 static inline bool mustUploadLeafList(void)
 {
     return (isCentral() && ((cfgs.value_3 & CONFIG_3_UPLOAD_LEAF_LIST_MASK) == CONFIG_3_UPLOAD_LEAF_LIST_MASK));
-}
-
-static bool LeafListFillFn(app_fifo_t * const p_fifo)
-{
-    return false;
 }
 
 static void upload_leaf_list(void)

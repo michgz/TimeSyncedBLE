@@ -69,10 +69,34 @@ typedef struct config_service_t
 
 } config_service_t;
 
+/**  VALUE 1
+ *   -------
+ *   A byte-sized configuration item that is stored in non-volatile memory. Currently no bits are defined.
+ */
+
+#define   CONFIG_1_DEFAULT     0x00
+#define   CONFIG_1_LEN         sizeof(uint8_t)
+
+/**  VALUE 2
+ *   -------
+ *   A long-word-sized configuration item that is stored in non-volatile memory. Currently no bits are defined.
+ */
+
+#define   CONFIG_2_DEFAULT     0x00000000
+#define   CONFIG_2_LEN         sizeof(uint32_t)
+
+/**  VALUE 3
+ *   -------
+ *   A byte-sized configuration item that is restored to default on a reset (is volatile). Currently two bits
+ *   are defined.
+ */
+
 #define CONFIG_3_SIMPLE_TRIGGER_MASK 0x02
 #define CONFIG_3_UPLOAD_LEAF_LIST_MASK 0x08
 
 #define CONFIG_3_DEFAULT     (CONFIG_3_SIMPLE_TRIGGER_MASK|CONFIG_3_UPLOAD_LEAF_LIST_MASK)
+
+
 
 extern uint16_t service_cfg_on_ble_evt(config_service_t *p_cfgs, ble_evt_t const * p_evt);
 

@@ -60,10 +60,10 @@ typedef struct avg_buf_tag
     uint32_t            xyz_sum_n;
     XYZ_T               average;
     bool                have_average;
-    uint32_t            half_window_size;
+    uint32_t            trigger_delay;  // Delay between passing the threshold and actually performing the trigger. Allows largest_so_far to really measure a peak value
     uint32_t            trigger_countdown;
     uint32_t            trigger_holdoff;
-    uint32_t            trigger_holdoff_countdown;
+    uint32_t            trigger_holdoff_countdown;  // Hold-off between completing a trigger and receiving a new one
     uint32_t            largest_so_far; // Square magnitude of the largest offset so far.
 
 } avg_buf_T;
@@ -77,7 +77,7 @@ static void AvgBuffer_Init(avg_buf_T * p_avg_buf)
     p_avg_buf->xyz_sum_n = 0;
 
     // A delay between getting a reading and doing a detection. Units of samples.
-    p_avg_buf->half_window_size = 125;
+    p_avg_buf->trigger_delay = 125;
 
     // Holdoff after a detection before the next one.
     p_avg_buf->trigger_holdoff = 1250;
@@ -248,7 +248,7 @@ static void processTrigger(avg_buf_T * const p_avg, uint32_t sq_mag, const uint3
         // Now do the trigger detection.
         if (sq_mag > sq_mag_thresh)
         {
-            p_avg->trigger_countdown = p_avg->half_window_size;
+            p_avg->trigger_countdown = p_avg->trigger_delay;
             p_avg->largest_so_far = sq_mag;
         }
     }
