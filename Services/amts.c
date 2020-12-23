@@ -52,6 +52,7 @@
 #include "TimedCircBuffer.h"
 
 #define NRF_LOG_MODULE_NAME AMTS
+#define NRF_LOG_LEVEL 4
 #include "nrf_log.h"
 NRF_LOG_MODULE_REGISTER();
 

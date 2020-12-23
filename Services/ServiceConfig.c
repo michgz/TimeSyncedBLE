@@ -146,8 +146,8 @@ void fds_handler(fds_evt_t const * p_evt)
                 {
                     // A write or update has completed. Now reset to run with the new value.
 
-                    (void) sd_nvic_SystemReset();
-                    while(true);
+                    //(void) sd_nvic_SystemReset();
+                    //while(true);
                 }
             }
             break;
@@ -230,7 +230,7 @@ void config_init(config_service_t * p_ctx)
 
         if (rec.p_header)
         {
-            if (rec.p_header->length_words >= 4)
+            if (rec.p_header->length_words >= 1)
             {
                 if (rec.p_data)
                 {

@@ -51,9 +51,6 @@
 #include "nrf_ble_scan.h"
 #include "nrf_delay.h"
 
-#include "nrf_log.h"
-#include "nrf_log_ctrl.h"
-#include "nrf_log_default_backends.h"
 #include "nrf_drv_gpiote.h"
 #include "nrf_gpiote.h"
 
@@ -69,6 +66,13 @@
 
 #include "HwTimers.h"
 #include "HwSensor.h"
+
+
+#define NRF_LOG_MODULE_NAME main
+#define NRF_LOG_LEVEL 4
+#include "nrf_log.h"
+#include "nrf_log_ctrl.h"
+#include "nrf_log_default_backends.h"
 
 // Relay application related LEDs
 #define PERIPHERAL_ADVERTISING_LED      -1
@@ -143,13 +147,17 @@ APP_TIMER_DEF(notif_timeout);
 APP_TIMER_DEF(m_reading_timer);
 APP_TIMER_DEF(led_flash_timer);
 
-#define SLEEP_TIMEOUT    0            /**< Timeout for peripheral to wait before sleeping -- currently 0 to indicate no timeout. */
+#define SLEEP_TIMEOUT_PERIPHERAL    APP_TIMER_TICKS(2*60*1000)            /**< Timeout for peripheral to wait before sleeping -- 0 to indicate no timeout. */
+#define SLEEP_TIMEOUT_CENTRAL       APP_TIMER_TICKS(10*60*1000)           /**< Timeout for peripheral to wait before sleeping -- 0 to indicate no timeout. */
 
 #define SCAN_TIMEOUT     APP_TIMER_TICKS(120000)                 /**< Time between doing scans  */
 
 static void notif_timeout_handler(void * p_context);
 static void scan_timer_timeout_handler(void * p_context);
 static void do_time_sync(void);
+
+static void sync_timer_init(void);
+static void sync_timer_stop(void);
 
 //NRF_BLE_GQ_DEF(m_ble_gatt_queue,                                        /**< BLE GATT Queue instance. */
 //               NRF_SDH_BLE_CENTRAL_LINK_COUNT,
@@ -177,7 +185,7 @@ static ble_uuid_t m_adv_uuids[] =
 static char const m_target_periph_name[] = "";
 
 
-static ble_gap_scan_params_t m_scan_param =                 /**< Scan parameters requested for scanning and connection. */
+static ble_gap_scan_params_t m_scan_param_central =                 /**< Scan parameters requested for scanning and connection. */
 {
     .active        = 0x01,
     .interval      = NRF_BLE_SCAN_SCAN_INTERVAL,
@@ -201,6 +209,7 @@ static ble_gap_scan_params_t m_scan_param_peripheral =                 /**< Scan
 };
 
 static void scan_start (void);
+static void scan_stop (void);
 
 #ifdef PERIPHERAL
 //    static bool isPeripheral(void) {return false;}
@@ -217,6 +226,7 @@ static const bool isPeripheral(void) {return !isCentral();}
     static bool isCentral(void) {return true;}
 #endif
 
+bool publicIsCentral(void){ return isCentral(); }
 
 static void amts_evt_handler(nrf_ble_amts_evt_t);
 static nrf_ble_amts_t    m_amts;
@@ -251,15 +261,40 @@ static void do_sleep(void)
     if (isAwake)
     {
         isAwake = false;
-        nrf_ppi_channel_disable(NRF_PPI_CHANNEL7);
+
+        scan_stop();
+        if (isUseSyncTimer())
+        {
+            sync_timer_stop();
+        }
+
+        led_flash_seq_stop();
         sensor_off();
+        gpio_off();
     }
 }
 
 static void do_wake(void)
 {
-    isAwake = true;
-    nrf_ppi_channel_enable(NRF_PPI_CHANNEL7);
+    if (!isAwake)
+    {
+        isAwake = true;
+        led_flash_seq_start();
+
+        TimedCircBuffer_Clear();
+
+        if (isPeripheral())   // << for testing only, don't want central scanning
+        {
+            scan_start();
+        }
+        if (isUseSyncTimer())
+        {
+            sync_timer_init();
+        }
+
+        sensor_on();
+        gpio_on();
+    }
 }
 
 bool IsAwake(void) {return isAwake;}
@@ -268,15 +303,9 @@ static void on_sleep_timer_timeout(void * p_context)
 {
     (void) p_context;
 
-    ret_code_t err_code;
+    // The timer has timed out. Can sleep at this point (continuing advertising).
 
-    // The timer has timed out. Central should not make any changes, peripheral can sleep
-    // at this point (continuing advertising).
-
-    if (isPeripheral())
-    {
-        do_sleep();
-    }
+    do_sleep();
 }
 
 static void flash_led(void)
@@ -342,16 +371,24 @@ static void timers_init(void)
     err_code = app_timer_create(&m_sleep_timer, APP_TIMER_MODE_SINGLE_SHOT, on_sleep_timer_timeout);
     APP_ERROR_CHECK(err_code);
 
-    do_wake();
+    isAwake = true;
 
-    if (SLEEP_TIMEOUT != 0)
+    if (isPeripheral())
     {
-        err_code = app_timer_start(m_sleep_timer, SLEEP_TIMEOUT, (void *) 0);
-        APP_ERROR_CHECK(err_code); 
+        if (SLEEP_TIMEOUT_PERIPHERAL != 0)
+        {
+            err_code = app_timer_start(m_sleep_timer, SLEEP_TIMEOUT_PERIPHERAL, (void *) 0);
+            APP_ERROR_CHECK(err_code); 
+        }
     }
-
-    if (isCentral())
+    else
     {
+        if (SLEEP_TIMEOUT_CENTRAL != 0)
+        {
+            err_code = app_timer_start(m_sleep_timer, SLEEP_TIMEOUT_CENTRAL, (void *) 0);
+            APP_ERROR_CHECK(err_code); 
+        }
+
         err_code = app_timer_create(&m_scan_timer, APP_TIMER_MODE_REPEATED, scan_timer_timeout_handler);
         APP_ERROR_CHECK(err_code);
 
@@ -674,11 +711,12 @@ static bool scan_from_scan_timer_timeout(void)
         // connected there is not that route, so we must do here.
         do_time_sync();
     }
-    else
+    else if (IsAwake())
     {
         scan_start();
+        return true;
     }
-    return true;
+    return false;
 }
 
 static bool doingDownload = false;
@@ -736,7 +774,8 @@ static void reading_timeout_handler(void * p_context)
  *  only, will normally be false.     */
 static inline bool mustUploadLeafList(void)
 {
-    return (isCentral() && ((cfgs.value_3 & CONFIG_3_UPLOAD_LEAF_LIST_MASK) == CONFIG_3_UPLOAD_LEAF_LIST_MASK));
+    //return (isCentral() && ((cfgs.value_3 & CONFIG_3_UPLOAD_LEAF_LIST_MASK) == CONFIG_3_UPLOAD_LEAF_LIST_MASK));
+    return true;
 }
 
 static void upload_leaf_list(void)
@@ -755,6 +794,7 @@ static void scan_evt_handler(scan_evt_t const * p_scan_evt)
     {
         case NRF_BLE_SCAN_EVT_CONNECTING_ERROR:
         {
+            NRF_LOG_WARNING("Scan connecting error");
             err_code = p_scan_evt->params.connecting_err.err_code;
             APP_ERROR_CHECK(err_code);
         } break;
@@ -779,10 +819,10 @@ static void scan_evt_handler(scan_evt_t const * p_scan_evt)
             NRF_LOG_INFO("Scan timed out.");
             //scan_start();
 
-             if (isCentral() && m_conn_handle != BLE_CONN_HANDLE_INVALID && mustUploadLeafList())
-             {
+            if (isCentral() && m_conn_handle != BLE_CONN_HANDLE_INVALID && mustUploadLeafList())
+            {
                 upload_leaf_list();
-             }
+            }
 
             // Scan completed. Now start beaconing.
 
@@ -793,6 +833,7 @@ static void scan_evt_handler(scan_evt_t const * p_scan_evt)
 
         case NRF_BLE_SCAN_EVT_FILTER_MATCH:
         {
+            NRF_LOG_INFO("Scan filter match");
             on_scan_list_scan_evt(p_scan_evt);
 
             // Initiate connection - don't need to do this, since using "connect_if_match".
@@ -806,28 +847,32 @@ static void scan_evt_handler(scan_evt_t const * p_scan_evt)
 
         case NRF_BLE_SCAN_EVT_NOT_FOUND:
         {
-            // This is called if a device is seen without filters enabled, i.e. the peripheral case.
-            ble_gap_evt_adv_report_t const * adv = p_scan_evt->params.p_not_found;
-
-
-            //if (adv->peer_addr.addr[0] == 0x8b)  // temporary -- look for a known address
+            NRF_LOG_INFO("Scan not found");
+            if (isCentral())
             {
-
-            // Only recognise non-connectable, non-scannable and non-directed advertisements.
-            if (!adv->type.connectable && !!adv->type.scannable && !adv->type.directed)
-            {
-                uint16_t offs = 0;
-                uint16_t len = ble_advdata_search(adv->data.p_data, adv->data.len, &offs, BLE_GAP_AD_TYPE_MANUFACTURER_SPECIFIC_DATA);
-                if (len > 0)
-                {
-                    check_manu_data(&adv->data.p_data[offs], len);
-                }
+                // It's not clear why this will be called in the central case. Best to ignore it.
             }
+            else
+            {
+                // This is called if a device is seen without filters enabled, i.e. the peripheral case.
+                ble_gap_evt_adv_report_t const * adv = p_scan_evt->params.p_not_found;
+
+                // Only recognise non-connectable, non-scannable and non-directed advertisements.
+                if (!adv->type.connectable && !!adv->type.scannable && !adv->type.directed)
+                {
+                    uint16_t offs = 0;
+                    uint16_t len = ble_advdata_search(adv->data.p_data, adv->data.len, &offs, BLE_GAP_AD_TYPE_MANUFACTURER_SPECIFIC_DATA);
+                    if (len > 0)
+                    {
+                        check_manu_data(&adv->data.p_data[offs], len);
+                    }
+                }
             }
 
         } break;
 
         default:
+            NRF_LOG_INFO("Scan evt: 0x%x", p_scan_evt->scan_evt_id);
             break;
     }
 }
@@ -860,7 +905,7 @@ static void scan_init(void)
 
         init_scan.connect_if_match = false;
         init_scan.conn_cfg_tag     = APP_BLE_CONN_CFG_TAG;
-        init_scan.p_scan_param = &m_scan_param;
+        init_scan.p_scan_param = &m_scan_param_central;
 
         err_code = nrf_ble_scan_init(&m_scan, &init_scan, scan_evt_handler);
         APP_ERROR_CHECK(err_code);
@@ -890,6 +935,11 @@ static void scan_start(void)
 
     err_code = nrf_ble_scan_start(&m_scan);
     APP_ERROR_CHECK(err_code);
+}
+
+static void scan_stop(void)
+{
+    nrf_ble_scan_stop();
 }
 
 static unsigned int debug_pkt_count = 0;
@@ -932,6 +982,8 @@ static void scan_timer_timeout_handler(void * p_context)
 {
     if (isCentral())
     {
+        NRF_LOG_DEBUG("scan_timer timeout");
+
         if (isDebugPacket() && debug_packet_from_scan_timer_timeout())
         {
         }
@@ -1041,7 +1093,7 @@ static void on_sync_timer_timeout(void * p_context)
         err_code = ts_tx_stop();
         APP_ERROR_CHECK(err_code);
 
-        NRF_LOG_INFO("Stopping sync beacon\r\n");
+        NRF_LOG_INFO("Stopping sync beacon");
     }
 
     if (isCentral() && m_conn_handle != BLE_CONN_HANDLE_INVALID && m_advertising.adv_mode_current == BLE_ADV_MODE_IDLE)
@@ -1055,7 +1107,16 @@ static void on_sync_timer_timeout(void * p_context)
         m_advertising.adv_modes_config.ble_adv_fast_timeout = APP_ADV_DURATION;
 
         // Restart advertising and scanning
-        adv_scan_start();
+        if (isCentral())
+        {
+            adv_scan_start();
+        }
+        else if (m_conn_handle == BLE_CONN_HANDLE_INVALID)
+        {
+            // Start advertising.
+            err_code = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
+            APP_ERROR_CHECK(err_code);
+        }
     }
 }
 
@@ -1072,7 +1133,7 @@ static void do_time_sync(void)
 
         NRF_LOG_INFO("Starting sync beacon transmission!\r\n");
 
-        err_code = app_timer_start(m_sync_timer, 5000, (void *)0 );
+        err_code = app_timer_start(m_sync_timer, APP_TIMER_TICKS(5000), (void *)0 );
         APP_ERROR_CHECK(err_code);
     }
     else
@@ -1326,13 +1387,10 @@ static void on_ble_evt(ble_evt_t const * p_ble_evt)
                 }
             }
 
-            if (isPeripheral())
-            {
-                // Any connection wakes the device up. Restart the timer.
+            // Any connection wakes the device up. Restart the timer.
 
-                do_wake();
-                APP_ERROR_CHECK(app_timer_stop(m_sleep_timer));
-            }
+            do_wake();
+            APP_ERROR_CHECK(app_timer_stop(m_sleep_timer));
 
             break;
 
@@ -1366,14 +1424,24 @@ static void on_ble_evt(ble_evt_t const * p_ble_evt)
                 if (PERIPHERAL_CONNECTED_LED != -1)
                     bsp_board_led_off(PERIPHERAL_CONNECTED_LED);
 
-                if (SLEEP_TIMEOUT != 0)
+                if (SLEEP_TIMEOUT_PERIPHERAL != 0)
                 {
-                    err_code = app_timer_start(m_sleep_timer, SLEEP_TIMEOUT, (void *) 0);
+                    err_code = app_timer_start(m_sleep_timer, SLEEP_TIMEOUT_PERIPHERAL, (void *) 0);
                     APP_ERROR_CHECK(err_code);
                 }
             }
             else if (isCentral())
             {
+                NRF_LOG_INFO("Central disconnected. conn_handle: 0x%x, reason: 0x%x",
+                             p_gap_evt->conn_handle,
+                             p_gap_evt->params.disconnected.reason);
+
+                if (SLEEP_TIMEOUT_CENTRAL != 0)
+                {
+                    err_code = app_timer_start(m_sleep_timer, SLEEP_TIMEOUT_CENTRAL, (void *) 0);
+                    APP_ERROR_CHECK(err_code);
+                }
+
                 // Start scanning.
                 //scan_start();
 
@@ -1392,12 +1460,17 @@ static void on_ble_evt(ble_evt_t const * p_ble_evt)
             break;
 
         case BLE_GAP_EVT_TIMEOUT:
-            if (isCentral())
             {
-                // No timeout for scanning is specified, so only connection attempts can timeout.
-                if (p_gap_evt->params.timeout.src == BLE_GAP_TIMEOUT_SRC_CONN)
+                NRF_LOG_INFO("GAP timeout, reason: 0x%x",
+                             p_gap_evt->params.timeout.src);
+                if (isCentral())
                 {
-                    NRF_LOG_INFO("Connection Request timed out.");
+                    // Check that the timeout results from a connection attempts. Scan timeouts also
+                    // seem to result in this message, but should be handled in NRF_BLE_SCAN_EVT_SCAN_TIMEOUT.
+                    if (p_gap_evt->params.timeout.src == BLE_GAP_TIMEOUT_SRC_CONN)
+                    {
+                        NRF_LOG_INFO("Connection Request timed out.");
+                    }
                 }
             }
             break;
@@ -1522,6 +1595,7 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
 
         case NRF_BLE_AMTS_EVT_TRANSFER_FINISHED:
         {
+            NRF_LOG_INFO("NRF_BLE_AMTS_EVT_TRANSFER_FINISHED, bytes: 0x%x", evt.bytes_transfered_cnt);
 #if 0
             counter_stop();
 #endif // 0
@@ -1979,10 +2053,19 @@ static void sync_timer_init(void)
     err_code = ts_enable();
     APP_ERROR_CHECK(err_code);
     
-    NRF_LOG_INFO("Started listening for beacons.\r\n");
-    NRF_LOG_INFO("Call ts_tx_start() to start sending sync beacons\r\n");
+    NRF_LOG_INFO("Started listening for beacons.");
+    NRF_LOG_INFO("Call ts_tx_start() to start sending sync beacons");
 }
 
+static void sync_timer_stop(void)
+{
+    ret_code_t err_code;
+
+    err_code = ts_disable();
+    APP_ERROR_CHECK(err_code);
+
+    nrf_ppi_channel_disable(NRF_PPI_CHANNEL0);
+}
 
 /**@brief Main task entry function.
  *
@@ -2002,6 +2085,8 @@ static void main_task_function (void * pvParameter)
     {
         led_flash_seq_init();
     }
+
+    timers_init();
 
     // Initialise the circular buffer with a fixed number of points. In the
     // case of a central device, it does not need to store any points, and
@@ -2037,7 +2122,6 @@ static void main_task_function (void * pvParameter)
     bool erase_bonds;
 
     // Initialize.
-    timers_init();
     buttons_leds_init(&erase_bonds);
     power_management_init();
     ble_stack_init();
@@ -2062,6 +2146,11 @@ static void main_task_function (void * pvParameter)
 
     err_code = app_timer_create(&m_sync_timer, APP_TIMER_MODE_SINGLE_SHOT, on_sync_timer_timeout);
     APP_ERROR_CHECK(err_code);
+
+    if (!isLedOnBroadcast())
+    {
+        led_flash_seq_start();
+    }
 
     // Start execution.
     if (erase_bonds == true)

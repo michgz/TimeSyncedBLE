@@ -23,6 +23,9 @@ typedef struct XYZ_tag
 /* Initialise the storage   */
 extern void TimedCircBuffer_Init(size_t size_of_buffer);
 
+/* Clear an existing storage */
+extern void TimedCircBuffer_Clear(void);
+
 /* Add an item to the circular buffer   */
 extern void TimedCircBuffer_Add(const XYZ_T *);
 

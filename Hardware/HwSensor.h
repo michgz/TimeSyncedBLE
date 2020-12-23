@@ -16,5 +16,10 @@ extern void timer_led_event_handler(nrf_timer_event_t event_type, void* p_contex
 
 
 extern void sensor_off(void);
+extern void gpio_off(void);
+
+extern void sensor_on(void);
+extern void gpio_on(void);
+
 
 #endif /* __H_HW_SENSOR */

@@ -59,6 +59,7 @@
 #define NRF_LOG_MODULE_NAME time_sync
 #define NRF_LOG_LEVEL 4
 #include "nrf_log.h"
+
 NRF_LOG_MODULE_REGISTER();
 
 #if   defined ( __CC_ARM )
@@ -470,20 +471,20 @@ void ts_on_sys_evt(uint32_t sys_evt, void * p_context)
             break;
         }
         case NRF_EVT_RADIO_SIGNAL_CALLBACK_INVALID_RETURN:
-            NRF_LOG_ERROR("NRF_EVT_RADIO_SIGNAL_CALLBACK_INVALID_RETURN\r\n");
+            NRF_LOG_ERROR("NRF_EVT_RADIO_SIGNAL_CALLBACK_INVALID_RETURN");
             app_error_handler(MAIN_DEBUG, __LINE__, (const uint8_t*)__FILE__);
             break;
         case NRF_EVT_RADIO_SESSION_CLOSED:
             {
                 m_timeslot_session_open = false;
 
-                NRF_LOG_INFO("NRF_EVT_RADIO_SESSION_CLOSED\r\n");
+                NRF_LOG_INFO("NRF_EVT_RADIO_SESSION_CLOSED");
             }
 
             break;
         case NRF_EVT_RADIO_SESSION_IDLE:
         {
-            NRF_LOG_INFO("NRF_EVT_RADIO_SESSION_IDLE\r\n");
+            NRF_LOG_INFO("NRF_EVT_RADIO_SESSION_IDLE");
 
             uint32_t err_code = sd_radio_session_close();
             APP_ERROR_CHECK(err_code);
@@ -491,7 +492,7 @@ void ts_on_sys_evt(uint32_t sys_evt, void * p_context)
         }
         default:
             // No implementation needed.
-            NRF_LOG_INFO("Event: 0x%08x\r\n", sys_evt);
+            NRF_LOG_INFO("Event: 0x%08x", sys_evt);
             break;
     }
 }
@@ -923,6 +924,58 @@ uint32_t ts_enable(void)
 
 uint32_t ts_disable(void)
 {
+    uint32_t err_code = NRF_SUCCESS;
+
+    m_master_counter = 0;
+    m_timeslot_session_open    = false;
+
+    err_code = sd_radio_session_close();
+    if (err_code != NRF_SUCCESS)
+    {
+        return err_code;
+    }
+
+#if 0
+    NRF_RADIO->EVENTS_DISABLED = 0;
+    NRF_RADIO->TASKS_DISABLE = 1;
+    while (NRF_RADIO->EVENTS_DISABLED == 0)
+    {
+        __NOP();
+    }
+
+    NRF_RADIO->TASKS_STOP           = 1;
+#endif
+
+    NVIC_DisableIRQ(TIMER0_IRQn);
+    NRF_TIMER0->TASKS_STOP          = 1;
+    NRF_TIMER0->TASKS_SHUTDOWN      = 1;
+
+    m_params.high_freq_timer[0]->TASKS_STOP     = 1;
+    m_params.high_freq_timer[0]->TASKS_SHUTDOWN = 1;
+    m_params.high_freq_timer[1]->TASKS_STOP     = 1;
+    m_params.high_freq_timer[1]->TASKS_SHUTDOWN = 1;
+#if 0
+    NVIC_DisableIRQ(m_params.egu_irq_type);
+
+    m_params.egu->INTENCLR = 0xFFFFFFFF;
+    ppi_radio_rx_disable();
+    ppi_sync_timer_adjust_disable();
+
+#endif
+
+    err_code = sd_clock_hfclk_release();
+    if (err_code != NRF_SUCCESS)
+    {
+        return err_code;
+    }
+
+    err_code |= sd_power_mode_set(NRF_POWER_MODE_LOWPWR);
+    if (err_code != NRF_SUCCESS)
+    {
+        return err_code;
+    }
+
+
     // TODO:
     //       - Close SoftDevice radio session (sd_radio_session_close())
     //       - Stop radio activity
@@ -932,7 +985,10 @@ uint32_t ts_disable(void)
     //       - Release HFCLK (sd_clock_hfclk_release()),
     //       - Go back to low-power (mode sd_power_mode_set(NRF_POWER_MODE_LOWPWR))
     // Care must be taken to ensure clean stop. Order of tasks above should be reconsidered.
-    return NRF_ERROR_NOT_SUPPORTED;
+    //
+    // UPDATE 27/12/2020: the ordering above works reasonably well, even though some of the
+    //  steps are still commented. May tweak some more.
+    return err_code;
 }
 
 uint32_t ts_tx_start(uint32_t sync_freq_hz)

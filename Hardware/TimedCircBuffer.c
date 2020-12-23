@@ -5,25 +5,31 @@
 #include "TimedCircBuffer.h"
 #include "app_error.h"
 #include "Config.h"
+#include "HwTimers.h"
 
 #include "amt.h"
 #include "time_sync.h"
 #include "app_fifo.h"
+#include "app_timer.h"
 
 #include <string.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdbool.h>
 
+APP_TIMER_DEF(m_lock_timeout_timer);
+
+extern bool publicIsCentral(void);
 
 // Must do detection against a longer-term average?
-static const inline bool doDetect(void) {return true;}
+static const inline bool doDetect(void) {return publicIsCentral();}
 
 // Number of samples over which to calculate the longer-term average
 #define DETECT_N   (1000)
 
 // Square of the magnitude difference from the longer-term average to trigger a detection
-#define DETECT_SQ_MAG    (50*50)
+//  Units of g/1000 ^2.
+#define DETECT_SQ_MAG    (1000*1000)
 
 /* A circular buffer.   */
 typedef struct buf_tag
@@ -80,7 +86,7 @@ static void AvgBuffer_Init(avg_buf_T * p_avg_buf)
     p_avg_buf->trigger_delay = 125;
 
     // Holdoff after a detection before the next one.
-    p_avg_buf->trigger_holdoff = 1250;
+    p_avg_buf->trigger_holdoff = 125*2;
 
     p_avg_buf->trigger_countdown = 0;
 
@@ -88,8 +94,29 @@ static void AvgBuffer_Init(avg_buf_T * p_avg_buf)
     p_avg_buf->trigger_holdoff_countdown = 625;
 }
 
+static void AvgBuffer_Clear(avg_buf_T * p_avg_buf)
+{
+    p_avg_buf->have_average = false;
+    p_avg_buf->xyz_sum_n = 0;
+
+    p_avg_buf->trigger_countdown = 0;
+
+    // Start with a small holdoff.
+    p_avg_buf->trigger_holdoff_countdown = 625;
+}
 
 static bool lock_buffer_at_time_point(buf_T * p_buf, uint32_t time_point);
+static void release_lock(buf_T * p_buf);
+
+static void lock_timeout_handler(void * p_context)
+{
+    // The locked data has not been read out. Assume something has gone wrong and just
+    // release it anyway.
+    if (!!p_Buf)
+    {
+        release_lock(p_Buf);
+    }
+}
 
 void TimedCircBuffer_Init(size_t size_of_buffer)
 {
@@ -116,8 +143,26 @@ void TimedCircBuffer_Init(size_t size_of_buffer)
     {
         p_Buf = NULL;
     }
+
+    ret_code_t err_code;
+
+    err_code = app_timer_create(&m_lock_timeout_timer, APP_TIMER_MODE_SINGLE_SHOT, &lock_timeout_handler);
+    APP_ERROR_CHECK(err_code);
 }
 
+void TimedCircBuffer_Clear(void)
+{
+    if (!! p_Avg)
+    {
+        AvgBuffer_Clear(p_Avg);
+    }
+
+    p_Buf->is_locked = false;
+    p_Buf->is_lock_overflowed = false;
+    p_Buf->has_wrapped = false;
+    p_Buf->is_sending = false;
+    p_Buf->ptr = 0;
+}
 
 
 
@@ -177,6 +222,8 @@ enum
     INSTRUCTION_CODE__IS_LOCKED = 0x0B,
     INSTRUCTION_CODE__READ_OUT = 0x0E,
     INSTRUCTION_CODE__TEST = 0x21,
+    // 0x22 reserved for trigger uploads
+    INSTRUCTION_CODE__IDENTIFY_SELF = 0x23,
     INSTRUCTION_CODE__QUERY_IS_SYNCED = 0x11,
     INSTRUCTION_CODE__QUERY_SYNC_DEBUGS = 0x13,
     INSTRUCTION_CODE__QUERY_CURRENT_TIME = 0x16,
@@ -304,6 +351,8 @@ static void Add(buf_T * const p_buf, const XYZ_T * xyz)
     {
         // The lock is complete! Trigger the sending.
         p_buf->is_sending = true;
+
+        app_timer_start(m_lock_timeout_timer, APP_TIMER_TICKS(60000), (void *) 0);
     }
 }
 
@@ -558,7 +607,39 @@ static bool lock_buffer_at_time_point(buf_T * p_buf, uint32_t time_point)
         return false;
     }
 
-    if (time_point >= p_buf->time_base)
+    if (time_point == 0xFFFFFFFFUL)
+    {
+        // For debugging, reserve this specific value to mean "current time".
+        if (p_buf->ptr == 0)
+        {
+            // wrap-around
+            time_point_ptr = p_buf->size - 1;
+        }
+        else
+        {
+            time_point_ptr = p_buf->ptr - 1;
+        }
+
+        time_point = p_buf->time_base + 4UL*p_buf->ptr;
+
+        end = time_point_ptr + p_buf->halfLockSize;
+        if (end >= p_buf->size)
+        {
+            // Wrapped around
+            end -= p_buf->size;
+        }
+
+        if (time_point_ptr > p_buf->halfLockSize)
+        {
+            start = time_point_ptr - p_buf->halfLockSize;
+        }
+        else
+        {
+            start = time_point_ptr + p_buf->size - p_buf->halfLockSize;
+        }
+
+    }
+    else if (time_point >= p_buf->time_base)
     {
         time_point_ptr = (time_point - p_buf->time_base)/4UL;
         if (time_point_ptr >= p_buf->ptr)
@@ -759,6 +840,11 @@ bool TimedCircBuffer_RxOperation(uint32_t code, uint32_t data)
 
                 uint32_t resp [2] = {INSTRUCTION_CODE__IS_LOCKED + 0x80000000UL, is_locked};
                 amts_queue_tx_data((uint8_t *) resp, 2*sizeof(uint32_t));
+            }
+            break;
+        case INSTRUCTION_CODE__IDENTIFY_SELF:
+            {
+                led_identification_seq_init();
             }
             break;
         case INSTRUCTION_CODE__READ_OUT:

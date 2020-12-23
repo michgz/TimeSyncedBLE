@@ -10,7 +10,11 @@
 
 extern void hw_timers_init(void);
 extern void led_flash_seq_init(void);
+extern void led_flash_seq_start(void);
+extern void led_flash_seq_stop(void);
 
 extern void hw_timers_stop(void);
+extern void led_identification_seq_init(void);  // flash the LED in a "self-identification" sequence, for the human user to view. Once complete,
+                                                // return to normal flash sequence.
 
 #endif /* __H_HW_TIMERS */

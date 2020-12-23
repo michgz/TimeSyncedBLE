@@ -325,8 +325,11 @@ void gpio_init(void)
 {
     ret_code_t err_code;
 
-    err_code = nrf_drv_gpiote_init();
-    APP_ERROR_CHECK(err_code);
+    if (!nrf_drv_gpiote_is_init())
+    {
+        err_code = nrf_drv_gpiote_init();
+        APP_ERROR_CHECK(err_code);
+    }
 
     //nrf_drv_gpiote_out_config_t out_config = GPIOTE_CONFIG_OUT_SIMPLE(false);
 
@@ -352,6 +355,7 @@ void sensor_init(void)
     twi_init();
 
     nrf_delay_ms(35);
+
     (void)read_reg(LIS2DH_WHO_AM_I);
     NRF_LOG_FLUSH();
 
@@ -381,35 +385,70 @@ void sensor_init(void)
     read_regs(LIS2DH_OUT_X_L);
 }
 
+void gpio_on(void) {;}
+void gpio_off(void) {;}
+
+void sensor_on(void)
+{
+    nrf_drv_twi_enable(&m_twi);
+
+    nrf_delay_ms(50);
+    write_reg(LIS2DH_CTRL_REG1, 0x97 );  // On
+    nrf_delay_ms(50);
+    NRF_LOG_FLUSH();
+
+    static volatile uint8_t x1 = 0;
+    static volatile uint8_t x2 = 0;
+    static volatile uint8_t x3 = 0;
+
+    nrf_delay_ms(5);
+    x1 = read_reg(LIS2DH_CTRL_REG1);
+    nrf_delay_ms(5);
+    x2 = read_reg(LIS2DH_CTRL_REG4);
+    nrf_delay_ms(5);
+    x3 = read_reg(LIS2DH_CTRL_REG3);
+    nrf_delay_ms(15);
+
+    read_regs(LIS2DH_OUT_X_L);
+
+    nrf_drv_gpiote_in_event_enable(PIN_IN, true);
+}
 
 void sensor_off(void)
 {
 
-hw_timers_stop();
+//hw_timers_stop();
 
-nrfx_gpiote_in_event_disable(PIN_IN);
+    nrf_drv_gpiote_in_event_disable(PIN_IN);
 
-/*
+
     nrf_delay_ms(50);
     write_reg(LIS2DH_CTRL_REG1, 0x00 );  // OFf
     nrf_delay_ms(50);
     NRF_LOG_FLUSH();
-*/
 
-//    nrf_drv_twi_disable(&m_twi);
+
+    nrf_drv_twi_disable(&m_twi);
+
+#if 0
+    nrf_gpio_cfg_default(TWI_SCL_PIN);
+    nrf_gpio_cfg_default(TWI_SDA_PIN);
+    nrf_gpio_cfg_default(INT_ACCEL_1);
+
+    nrf_drv_twi_uninit(&m_twi);
+
+    
+
+nrf_drv_gpiote_in_uninit(PIN_IN);
+
+
+//nrf_drv_gpiote_uninit();
+
     nrf_delay_ms(5);
 
-
     nrf_gpio_pin_set(SEN_ENABLE); // accelerometer power off
-
-
-
-
+#endif
 }
-
-
-
-
 
 
 
