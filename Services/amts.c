@@ -302,12 +302,14 @@ void nrf_ble_amts_on_ble_evt(ble_evt_t const * p_ble_evt, void * p_context)
     }
 }
 
-void StartSending(FILL_FN fn)
+void StartSending(FILL_FN fn, uint32_t ctx)
 {
     if (!static_ctx->busy)
     {
         currentCmdFn = fn;
         haveCurrentCmd = true;
+
+        static_ctx->context = ctx;
 
          // Get as many bytes as possible
         (void) currentCmdFn(&tx_fifo);
@@ -355,7 +357,7 @@ static void amts_data_handler(nrf_ble_amts_evt_t * p_evt)
             {
                 // A "start sending" message. Needs to be handled differently
                 TimedCircBuffer_RxOperation_NoResponse(op[0], op[1]);
-                StartSending(&TimedCircBuffer_FifoFill);
+                StartSending(&TimedCircBuffer_FifoFill, 0);
             }
             else {(void) TimedCircBuffer_RxOperation(op[0], op[1]);}
         }
@@ -379,6 +381,8 @@ void nrf_ble_amts_init(nrf_ble_amts_t * p_ctx, amts_evt_handler_t evt_handler, u
     fifos_init(tx_fifo_size, rx_fifo_size);
 
     static_ctx = p_ctx;
+
+    p_ctx->context = 0UL;
 
     err_code = sd_ble_uuid_vs_add(&base_uuid, &(p_ctx->uuid_type));
     APP_ERROR_CHECK(err_code);
@@ -486,7 +490,10 @@ static void finished(nrf_ble_amts_t * p_ctx)
     currentCmdFn = NULL;
 
     evt.bytes_transfered_cnt = p_ctx->bytes_sent;
+    evt.params.transfer_finished.context = p_ctx->context;
     evt.evt_type             = NRF_BLE_AMTS_EVT_TRANSFER_FINISHED;
+
+    p_ctx->context = 0UL;
 
     p_ctx->evt_handler(evt);
 

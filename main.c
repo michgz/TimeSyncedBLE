@@ -147,7 +147,7 @@ APP_TIMER_DEF(notif_timeout);
 APP_TIMER_DEF(m_reading_timer);
 APP_TIMER_DEF(led_flash_timer);
 
-#define SLEEP_TIMEOUT_PERIPHERAL    APP_TIMER_TICKS(2*60*1000)            /**< Timeout for peripheral to wait before sleeping -- 0 to indicate no timeout. */
+#define SLEEP_TIMEOUT_PERIPHERAL    APP_TIMER_TICKS(5*60*1000)            /**< Timeout for peripheral to wait before sleeping -- 0 to indicate no timeout. */
 #define SLEEP_TIMEOUT_CENTRAL       APP_TIMER_TICKS(10*60*1000)           /**< Timeout for peripheral to wait before sleeping -- 0 to indicate no timeout. */
 
 #define SCAN_TIMEOUT     APP_TIMER_TICKS(120000)                 /**< Time between doing scans  */
@@ -358,6 +358,8 @@ void doTrigger(enum BroadcastTypes ty)
         APP_ERROR_CHECK(err_code);
         err_code = sd_ble_gap_adv_start(m_advertising.adv_handle, m_advertising.conn_cfg_tag);
         APP_ERROR_CHECK(err_code);
+
+        NRF_LOG_INFO("Started scannable adv.");
     }
 }
 
@@ -613,6 +615,9 @@ static void check_manu_data(char const * x, int len)
             if (isPeripheral())
             {
                 const BroadcastData_T * receivedData = (BroadcastData_T const *) &x[2];
+
+                NRF_LOG_DEBUG("MANU DATA: 0x%x", receivedData->type);
+
                 if (receivedData->type == BroadcastType_RequestLock)
                 {
                     // Pretend like we've received a lock instruction INSTRUCTION_CODE__LOCK
@@ -634,7 +639,22 @@ static inline bool uploadSimpleTrigger(void)
         return false;
     }
     
-    return ((cfgs.value_3 & CONFIG_3_SIMPLE_TRIGGER_MASK) == CONFIG_3_SIMPLE_TRIGGER_MASK);
+    return ((cfgs.value_3 & CONFIG_3_SIMPLE_TRIGGER_MASK) != CONFIG_3_SIMPLE_TRIGGER_MASK);
+}
+
+static uint32_t last_trigger_size = 0UL;
+
+static void doTriggerUpload(void)
+{
+    NRF_LOG_DEBUG("UPLOAD Trigger 0x%x", last_trigger_size);
+
+    uint32_t root_size = (uint32_t) sqrtf((float) last_trigger_size);
+
+    last_trigger_size = 0UL;  // Clear the static value.
+
+    uint32_t data [3] = {0x80000022, root_size, (uint32_t) (ts_timestamp_get_ticks_u64(6) / 32000ULL)  };
+
+    amts_queue_tx_data((uint8_t const *) &data, 3*sizeof(uint32_t));
 }
 
 /** Called to indicate a trigger event, and to kick-start the response to it. This only
@@ -644,17 +664,15 @@ static inline bool uploadSimpleTrigger(void)
  *  acceleration event (normally that will be the case), this will be in units of m^2 s^-4.    */
 void trigger(uint32_t size)
 {
+    last_trigger_size = size;
+
     if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
     {
 
         /* If simple trigger upload is selected, upload the magnitude and take no other action.  */
         if (uploadSimpleTrigger())
         {
-            uint32_t root_size = (uint32_t) sqrtf((float) size);
-
-            uint32_t data [3] = {0x80000022, root_size, (uint32_t) (ts_timestamp_get_ticks_u64(6) / 32000ULL)  };
-
-            amts_queue_tx_data((uint8_t const *) &data, 3*sizeof(uint32_t));
+            doTriggerUpload();
         }
 
         /* Otherwise, send to leaf nodes if there are any.   */
@@ -781,7 +799,7 @@ static inline bool mustUploadLeafList(void)
 static void upload_leaf_list(void)
 {
     ScanListClearReading();
-    StartSending(&ScanList_FifoFill);
+    StartSending(&ScanList_FifoFill, 0);
 }
 
 /**@brief Function for handling Scanning Module events.
@@ -817,11 +835,15 @@ static void scan_evt_handler(scan_evt_t const * p_scan_evt)
         case NRF_BLE_SCAN_EVT_SCAN_TIMEOUT:
         {
             NRF_LOG_INFO("Scan timed out.");
-            //scan_start();
 
             if (isCentral() && m_conn_handle != BLE_CONN_HANDLE_INVALID && mustUploadLeafList())
             {
                 upload_leaf_list();
+            }
+            else if (isPeripheral())
+            {
+                // Peripheral should keep continually scanning.
+                scan_start();
             }
 
             // Scan completed. Now start beaconing.
@@ -847,9 +869,9 @@ static void scan_evt_handler(scan_evt_t const * p_scan_evt)
 
         case NRF_BLE_SCAN_EVT_NOT_FOUND:
         {
-            NRF_LOG_INFO("Scan not found");
             if (isCentral())
             {
+                NRF_LOG_INFO("Scan not found");
                 // It's not clear why this will be called in the central case. Best to ignore it.
             }
             else
@@ -860,6 +882,7 @@ static void scan_evt_handler(scan_evt_t const * p_scan_evt)
                 // Only recognise non-connectable, non-scannable and non-directed advertisements.
                 if (!adv->type.connectable && !!adv->type.scannable && !adv->type.directed)
                 {
+                    NRF_LOG_INFO("Scan not found");
                     uint16_t offs = 0;
                     uint16_t len = ble_advdata_search(adv->data.p_data, adv->data.len, &offs, BLE_GAP_AD_TYPE_MANUFACTURER_SPECIFIC_DATA);
                     if (len > 0)
@@ -973,7 +996,7 @@ static bool DebugPacketFillFifo(app_fifo_t * const p_fifo)
 static bool debug_packet_from_scan_timer_timeout(void)
 {
     debug_pkt_count = 0;
-    StartSending(&DebugPacketFillFifo);
+    StartSending(&DebugPacketFillFifo, 0);
     return true;
 }
 
@@ -1153,6 +1176,8 @@ static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
 {
     uint32_t err_code;
 
+    //NRF_LOG_INFO("Adv Evt 0x%x", ble_adv_evt);
+
     switch (ble_adv_evt)
     {
         case BLE_ADV_EVT_FAST:
@@ -1180,6 +1205,8 @@ static void on_adv_evt_broadcast(ble_adv_evt_t ble_adv_evt)
     switch (ble_adv_evt)
     {
         case BLE_ADV_EVT_IDLE:
+            {
+                NRF_LOG_INFO("B/cast ADV_EVT_IDLE");
             // Timed out?
     ///        err_code = BroadcastAdvertising_SetUp(&m_advertising, false);
      //       APP_ERROR_CHECK(err_code);
@@ -1189,13 +1216,21 @@ static void on_adv_evt_broadcast(ble_adv_evt_t ble_adv_evt)
        //  scan_start();
 
 
-            // We've finished broadcasting. Prepare to do readings.
-            (void)doConnectionAndDownload();
+                // We've finished broadcasting. Prepare to do readings.
+           //     (void)doConnectionAndDownload();
 
+                // Changed 29-Dev: no longer connect and download. Simply send the trigger info to 
+                //  the host and let that handle it.
 
+                doTriggerUpload();
+
+            }
             break;
 
         default:
+            {
+                NRF_LOG_INFO("Adv b/cast 0x%x", ble_adv_evt);
+            }
             break;
     }
 }
@@ -1229,6 +1264,10 @@ static ret_code_t BroadcastAdvertising_SetUp(ble_advertising_t * const p_adverti
         init.config.ble_adv_fast_timeout  = APP_ADV_DURATION;
 
         init.evt_handler = on_adv_evt;
+
+    err_code = ble_advertising_init(&m_advertising, &init);
+    APP_ERROR_CHECK(err_code);
+
     }
     else
     {
@@ -1249,10 +1288,12 @@ static ret_code_t BroadcastAdvertising_SetUp(ble_advertising_t * const p_adverti
         init.config.ble_adv_fast_timeout  = APP_ADV_DURATION_FIRST;
 
         init.evt_handler = on_adv_evt_broadcast;
-    }
 
     err_code = ble_advertising_init(&m_advertising, &init);
     APP_ERROR_CHECK(err_code);
+    }
+
+
 
     ble_advertising_conn_cfg_tag_set(&m_advertising, APP_BLE_CONN_CFG_TAG);
 

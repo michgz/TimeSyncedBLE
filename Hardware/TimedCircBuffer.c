@@ -17,6 +17,8 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
+#include "nrf_log.h"
+
 APP_TIMER_DEF(m_lock_timeout_timer);
 
 extern bool publicIsCentral(void);
@@ -112,6 +114,9 @@ static void lock_timeout_handler(void * p_context)
 {
     // The locked data has not been read out. Assume something has gone wrong and just
     // release it anyway.
+
+    NRF_LOG_ERROR("LOCK timed out");
+
     if (!!p_Buf)
     {
         release_lock(p_Buf);
@@ -352,7 +357,7 @@ static void Add(buf_T * const p_buf, const XYZ_T * xyz)
         // The lock is complete! Trigger the sending.
         p_buf->is_sending = true;
 
-        app_timer_start(m_lock_timeout_timer, APP_TIMER_TICKS(60000), (void *) 0);
+        app_timer_start(m_lock_timeout_timer, APP_TIMER_TICKS(4*60*1000), (void *) 0);
     }
 }
 
@@ -445,6 +450,8 @@ static bool Error_FifoFill(app_fifo_t * const p_fifo)
     err_val[0] = 0;
     TestSendRemainingBytes = 0;
 
+    NRF_LOG_ERROR("LOCK error, discarding");
+
     if (!!p_Buf)
     {
         release_lock(p_Buf);
@@ -496,6 +503,8 @@ static bool TestDevice_FifoFill(app_fifo_t * const p_fifo)
 
     if (TestSendRemainingBytes == 0)
     {
+        NRF_LOG_INFO("LOCK completed (test)");
+
         if (!!p_Buf)
         {
             release_lock(p_Buf);
@@ -545,6 +554,8 @@ static bool Buf_FifoFill(buf_T * const p_buf, app_fifo_t * const p_fifo)
 
     if (p_buf->read_cnt_remaining == 0)
     {
+        NRF_LOG_INFO("LOCK completed");
+
         if (!!p_Buf)
         {
             release_lock(p_Buf);
@@ -598,12 +609,16 @@ static bool lock_buffer_at_time_point(buf_T * p_buf, uint32_t time_point)
     if (!p_buf->has_wrapped)
     {
         // If not wrapped, then we don't know the latest time base. Cannot use.
+
+        NRF_LOG_ERROR("lock_buffer_at_time_point: not wrapped");
         return false;
     }
 
     if (p_buf->is_locked)
     {
         // Already locked. Can't lock again
+
+        //NRF_LOG_ERROR("lock_buffer_at_time_point: already locked");
         return false;
     }
 
@@ -638,6 +653,8 @@ static bool lock_buffer_at_time_point(buf_T * p_buf, uint32_t time_point)
             start = time_point_ptr + p_buf->size - p_buf->halfLockSize;
         }
 
+        NRF_LOG_INFO("lock_buffer_at_time_point: requested 0xFFFFFFFF locked 0x%x", time_point);
+
     }
     else if (time_point >= p_buf->time_base)
     {
@@ -666,6 +683,8 @@ static bool lock_buffer_at_time_point(buf_T * p_buf, uint32_t time_point)
             start = time_point_ptr + p_buf->size - p_buf->halfLockSize;
         }
 
+        NRF_LOG_INFO("lock_buffer_at_time_point: requested 0x%x (1)", time_point);
+
     }
     else
     {
@@ -675,6 +694,7 @@ static bool lock_buffer_at_time_point(buf_T * p_buf, uint32_t time_point)
         if (time_point_ptr < p_buf->ptr)
         {
             // The requested time has already been overwritten. Can not handle.
+            NRF_LOG_ERROR("lock_buffer_at_time_point: requested 0x%x time-base 0x%x", time_point, p_buf->time_base);
             return false;
         }
 
@@ -696,6 +716,7 @@ static bool lock_buffer_at_time_point(buf_T * p_buf, uint32_t time_point)
             start = time_point_ptr + p_buf->size - p_buf->halfLockSize;
         }
 
+        NRF_LOG_INFO("lock_buffer_at_time_point: requested 0x%x (2)", time_point);
     }
 
     // All is good. Now start the lock.
@@ -726,6 +747,16 @@ bool TimedCircBuffer_RxOperation_NoResponse(uint32_t code, uint32_t data)
         case INSTRUCTION_CODE__READ_OUT:
             {
                 TimedCircBuffer_StartSending();
+            }
+            break;
+
+        case INSTRUCTION_CODE__LOCK:
+            {
+                if (!!p_Buf)
+                {
+                    // Discard error indicator -- we can't do anything with it
+                    (void) lock_buffer_at_time_point(p_Buf, data);
+                }
             }
             break;
 

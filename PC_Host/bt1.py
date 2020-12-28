@@ -11,7 +11,7 @@ import datetime
 from bleak import _logger as logger
 
 TARGET_ADDRESS = "F1:C8:1A:8D:37:8B"
-TARGET_LEAF_ADDRESS = "E2:45:E5:25:22:F0"
+TARGET_LEAF_ADDRESS =   "F1:C8:1A:8D:37:8B"  #"E2:45:E5:25:22:F0"
 
 
 SERVICE_UUID = "21171523-4740-4AA5-B66B-5D2C6851CC5C"
@@ -36,23 +36,60 @@ INSTRUCTION_CODE__QUERY_CURRENT_TIME = 0x16
 INSTRUCTION_CODE__LOCK = 0xA
 INSTRUCTION_CODE__IS_LOCKED = 0xB
 INSTRUCTION_CODE__READ_OUT = 0xE
+INSTRUCTION_CODE__IDENTIFY_SELF = 0x23
 
 
 rxed_data = b''
+dev_list = []
+do_dev_list = False
+is_leaf_locked = False
 
 def notification_handler_leaf(sender, data):
   
     global rxed_data
+    global dev_list
+    global do_dev_list
+    global is_leaf_locked
     
+    if len(data) >= 8:
+      if struct.unpack('<I', data[0:4])[0] == 0x0000001A:
+        count_dev = struct.unpack('<I', data[4:8])[0]
+        if 8+8*count_dev == len(data):
+          print("Got a list")
+          devs = []
+          i = 8
+          while i+8 <= len(data):
+            a = ""
+            for j in range(6):
+              a += "{0:02X}".format(data[i+6-j])
+              if j < 5:
+                a += ":"
+            devs.append(a)
+            i += 8
+          dev_list = devs
+          #print(dev_list)
+          do_dev_list = True
+      if struct.unpack('<I', data[0:4])[0] == 0x8000000B:
+        res_dev = struct.unpack('<I', data[4:8])[0]
+        is_leaf_locked = (res_dev != 0)
+          
     """Simple notification handler which prints the data received."""
     rxed_data += data
     print("{0}: {1}".format(sender, data))
+
+def notification_handler_leaf_2(sender, data):
+  
+    """Simple notification handler which prints the data received."""
+    print("        {0}: {1}".format(sender, data))
 
 
 async def run_specific_device_leaf(addr, debug=False):
   
     global rxed_data
-  
+    global dev_list
+    global do_dev_list
+    global is_leaf_locked
+    
     if debug:
         import sys
 
@@ -64,6 +101,14 @@ async def run_specific_device_leaf(addr, debug=False):
         l.addHandler(h)
         logger.addHandler(h)
 
+    # Do an initial connection to wake it up
+    #async with bleak.BleakClient(addr) as client:
+    #    x = await client.is_connected()
+    #    l.info("Connected: {0}".format(x))
+
+    #await asyncio.sleep(40.0)
+
+    # Now do the connection where we lock and read data
     async with bleak.BleakClient(addr) as client:
         x = await client.is_connected()
         l.info("Connected: {0}".format(x))
@@ -74,29 +119,69 @@ async def run_specific_device_leaf(addr, debug=False):
         l.info(y_char)
         l.info(y_char.service_uuid)   
         
-        
         await client.start_notify(READ_CHAR_UUID, notification_handler_leaf)
-        #  #await client.write_gatt_char(WRITE_CHAR_UUID, bytearray([0xe,0,0,0,0xff,0xff,0xff,0xff]))
-        await client.write_gatt_char(WRITE_CHAR_UUID, bytearray(struct.pack('<2I', INSTRUCTION_CODE__QUERY_IS_SYNCED, 0)))  # no data, just send 0
-        await asyncio.sleep(0.2)
-        await client.write_gatt_char(WRITE_CHAR_UUID, bytearray(struct.pack('<2I', INSTRUCTION_CODE__QUERY_CURRENT_TIME, 0)))  # no data, just send 0
-        await asyncio.sleep(0.2)
-        await client.write_gatt_char(WRITE_CHAR_UUID, bytearray(struct.pack('<2I', INSTRUCTION_CODE__IS_LOCKED, 0)))  # no data, just send 0
-        await asyncio.sleep(0.2)
         
-        await client.write_gatt_char(WRITE_CHAR_UUID, bytearray(struct.pack('<2I', INSTRUCTION_CODE__LOCK, 0xFFFFFFFF)))  # 0xFFFFFFFF means current time
-        await asyncio.sleep(0.4)
-        await client.write_gatt_char(WRITE_CHAR_UUID, bytearray(struct.pack('<2I', INSTRUCTION_CODE__IS_LOCKED, 0)))  # no data, just send 0
-        await asyncio.sleep(5.)  # Need to give sufficient time for the buffer to fill up.
-            # If not sufficient, nothing will be returned
-        
-        
-        rxed_data = b''
-        
-        await client.write_gatt_char(WRITE_CHAR_UUID, bytearray(struct.pack('<2I', INSTRUCTION_CODE__READ_OUT, 0)))  # no data, just send 0
-        await asyncio.sleep(0.2)
+        if False:
+          #await client.write_gatt_char(WRITE_CHAR_UUID, bytearray(struct.pack('<2I', INSTRUCTION_CODE__IDENTIFY_SELF, 0)))  # no data, just send 0
+          #await asyncio.sleep(2.0)
 
-        await asyncio.sleep(6.0)
+          await client.write_gatt_char(WRITE_CHAR_UUID, bytearray(struct.pack('<2I', INSTRUCTION_CODE__QUERY_IS_SYNCED, 0)))  # no data, just send 0
+          await asyncio.sleep(0.2)
+
+
+        else:
+          
+          #  #await client.write_gatt_char(WRITE_CHAR_UUID, bytearray([0xe,0,0,0,0xff,0xff,0xff,0xff]))
+          await client.write_gatt_char(WRITE_CHAR_UUID, bytearray(struct.pack('<2I', INSTRUCTION_CODE__QUERY_IS_SYNCED, 0)))  # no data, just send 0
+          await asyncio.sleep(0.2)
+          await client.write_gatt_char(WRITE_CHAR_UUID, bytearray(struct.pack('<2I', INSTRUCTION_CODE__QUERY_CURRENT_TIME, 0)))  # no data, just send 0
+          await asyncio.sleep(0.2)
+          await client.write_gatt_char(WRITE_CHAR_UUID, bytearray(struct.pack('<2I', INSTRUCTION_CODE__IS_LOCKED, 0)))  # no data, just send 0
+          await asyncio.sleep(0.2)
+          
+          #await client.write_gatt_char(WRITE_CHAR_UUID, bytearray(struct.pack('<2I', INSTRUCTION_CODE__LOCK, 0xFFFFFFFF)))  # 0xFFFFFFFF means current time
+          #await asyncio.sleep(0.4)
+          await client.write_gatt_char(WRITE_CHAR_UUID, bytearray(struct.pack('<2I', INSTRUCTION_CODE__IS_LOCKED, 0)))  # no data, just send 0
+          await asyncio.sleep(5.)  # Need to give sufficient time for the buffer to fill up.
+          # If not sufficient, nothing will be returned
+          
+          
+          rxed_data = b''
+          
+          #await client.write_gatt_char(WRITE_CHAR_UUID, bytearray(struct.pack('<2I', INSTRUCTION_CODE__READ_OUT, 0)))  # no data, just send 0
+          #await asyncio.sleep(0.2)
+
+        a = 0
+        while a < 1000:
+          await asyncio.sleep(1.0)
+          if do_dev_list:
+            do_dev_list = False
+            for dd in dev_list:
+              async with bleak.BleakClient(dd) as client_2:
+                x_2 = await client.is_connected()
+                l.info("Connected: {0}".format(x_2))
+                await client_2.start_notify(READ_CHAR_UUID, notification_handler_leaf_2)
+                await asyncio.sleep(1.2)
+                await client_2.write_gatt_char(WRITE_CHAR_UUID, bytearray(struct.pack('<2I', INSTRUCTION_CODE__QUERY_IS_SYNCED, 0)))  # no data, just send 0
+                await asyncio.sleep(0.2)
+                await client_2.write_gatt_char(WRITE_CHAR_UUID, bytearray(struct.pack('<2I', INSTRUCTION_CODE__QUERY_CURRENT_TIME, 0)))  # no data, just send 0
+                await asyncio.sleep(0.2)
+                is_leaf_locked = False
+                await client_2.write_gatt_char(WRITE_CHAR_UUID, bytearray(struct.pack('<2I', INSTRUCTION_CODE__IS_LOCKED, 0)))  # no data, just send 0
+                await asyncio.sleep(0.4)
+                if is_leaf_locked:
+                  rxed_data = b''
+                  await client_2.write_gatt_char(WRITE_CHAR_UUID, bytearray(struct.pack('<2I', INSTRUCTION_CODE__READ_OUT, 0)))  # no data, just send 0
+                  await asyncio.sleep(5.2)
+                  if len(rxed_data) > 0:
+                    with open(datetime.datetime.now().strftime("%Y%m%d_%H%M%S_")+dd+".bin", "wb") as f1:
+                      f1.write(rxed_data)
+                
+                await client_2.stop_notify(READ_CHAR_UUID)
+
+                z_2 = await client_2.disconnect()
+                l.info("Disconnected: {0}".format(z_2))
+          a += 1
         
         # Now save any data that has been received
         if len(rxed_data) > 0:

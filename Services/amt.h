@@ -286,6 +286,13 @@ typedef struct
     uint16_t        length; /**< Length of received data. */
 } ble_amts_evt_rx_data_t;
 
+/* This structure is passed to an event when @ref NRF_BLE_AMTS_EVT_TRANSFER_FINISHED occurs.  */
+typedef struct
+{
+    uint32_t        context;
+
+} ble_amts_evt_transfer_finished_t;
+
 /**@brief AMTS Event structure. */
 typedef struct
 {
@@ -295,6 +302,7 @@ typedef struct
     union
     {
         ble_amts_evt_rx_data_t rx_data; /**< @ref BLE_NUS_EVT_RX_DATA event data. */
+        ble_amts_evt_transfer_finished_t transfer_finished;
     } params;
 
 
@@ -328,6 +336,7 @@ typedef struct
     amts_evt_handler_t       evt_handler;            //!< Application event handler to be called when there is an event related to the AMTS module. */
     bool                     busy;                   //!< Busy flag. Indicates that the hvx function returned busy and that there is still data to be transfered. */
     bool                     notification_enabled;
+    uint32_t                 context;
     uint16_t                 max_payload_len;        //!< Maximum number of bytes that can be sent in one notification. */
     uint32_t                 kbytes_sent;            //!< Number of kilobytes sent. */
     uint32_t                 bytes_sent;             //!< Number of bytes sent. */
@@ -399,7 +408,7 @@ extern void amts_queue_tx_data(uint8_t const * p_data, unsigned int n_data);
 
 #include "app_fifo.h"
 typedef bool (*FILL_FN)(app_fifo_t * const);
-extern void StartSending(FILL_FN fn);
+extern void StartSending(FILL_FN fn, uint32_t context);
 
 extern unsigned int amts_get_rejected_byte_count(void);
 extern void amts_clear_rejected_byte_count(void);
