@@ -31,7 +31,7 @@ static const inline bool doDetect(void) {return publicIsCentral();}
 
 // Square of the magnitude difference from the longer-term average to trigger a detection
 //  Units of g/1000 ^2.
-#define DETECT_SQ_MAG    (1000*1000)
+static uint32_t DETECT_SQ_MAG = (1000*1000);
 
 /* A circular buffer.   */
 typedef struct buf_tag
@@ -153,6 +153,15 @@ void TimedCircBuffer_Init(size_t size_of_buffer)
 
     err_code = app_timer_create(&m_lock_timeout_timer, APP_TIMER_MODE_SINGLE_SHOT, &lock_timeout_handler);
     APP_ERROR_CHECK(err_code);
+}
+
+void TimedCircBuffer_SetThreshold(uint32_t new_threshold)
+{
+    // Reject the default value which is 0.
+    if (new_threshold > 0 && new_threshold < 8192)
+    {
+        DETECT_SQ_MAG = (new_threshold * new_threshold);
+    }
 }
 
 void TimedCircBuffer_Clear(void)

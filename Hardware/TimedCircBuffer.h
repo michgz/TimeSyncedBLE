@@ -23,6 +23,9 @@ typedef struct XYZ_tag
 /* Initialise the storage   */
 extern void TimedCircBuffer_Init(size_t size_of_buffer);
 
+/* Set the threshold for the triggering (Central only)   */
+extern void TimedCircBuffer_SetThreshold(uint32_t new_threshold);
+
 /* Clear an existing storage */
 extern void TimedCircBuffer_Clear(void);
 

@@ -208,23 +208,24 @@ static ble_gap_scan_params_t m_scan_param_peripheral =                 /**< Scan
     .extended      = true,
 };
 
+/* Define the configs   */
+config_service_t cfgs;
+
 static void scan_start (void);
 static void scan_stop (void);
-
-#ifdef PERIPHERAL
-//    static bool isPeripheral(void) {return false;}
-//    static bool isCentral(void) {return true;}
 
 #define DEVICE_ID_BYTE_0_ADDR   0x10000060
 #define DEVICE_ID_BYTE_0     (*((uint8_t const * const)DEVICE_ID_BYTE_0_ADDR))
 
-static const bool isCentral(void) {return (DEVICE_ID_BYTE_0 == 0xE3);}
+static bool privateIsCentral = false;
+
+static inline void SetAsCentral(bool new_value)
+{
+    privateIsCentral = new_value;
+}
+
+static const bool isCentral(void) {return privateIsCentral;}
 static const bool isPeripheral(void) {return !isCentral();}
-#endif
-#ifdef CENTRAL
-    static bool isPeripheral(void) {return false;}
-    static bool isCentral(void) {return true;}
-#endif
 
 bool publicIsCentral(void){ return isCentral(); }
 
@@ -457,17 +458,12 @@ static void nrf_qwr_error_handler(uint32_t nrf_error)
     APP_ERROR_HANDLER(nrf_error);
 }
 
-
-config_service_t cfgs;
-
 /**@brief Function for handling events from the Config module.
  */
 uint16_t cfgs_handler(ble_evt_t const * p_evt)
 {
     return service_cfg_on_ble_evt(&cfgs, p_evt);
 }
-
-
 
 /**@snippet [Handling the data received over BLE] */
 
@@ -631,7 +627,8 @@ static void check_manu_data(char const * x, int len)
 }
 
 /** Returns true if trigger magnitude is to be uploaded. If true, then all other operation will not
- *  proceed. Therefore should normally be false.   */
+ *  proceed. If false, it will still be uploaded but after the trigger broadcast has completed. Should
+ *  normally be false.   */
 static inline bool uploadSimpleTrigger(void)
 {
     if (!isUploadTriggerSize())
@@ -639,7 +636,7 @@ static inline bool uploadSimpleTrigger(void)
         return false;
     }
     
-    return ((cfgs.value_3 & CONFIG_3_SIMPLE_TRIGGER_MASK) != CONFIG_3_SIMPLE_TRIGGER_MASK);
+    return ((cfgs.value_3 & CONFIG_3_SIMPLE_TRIGGER_MASK) == CONFIG_3_SIMPLE_TRIGGER_MASK);
 }
 
 static uint32_t last_trigger_size = 0UL;
@@ -788,12 +785,11 @@ static void reading_timeout_handler(void * p_context)
     do_a_connection();
 }
 
-/** Returns true if should upload the leaf list to the host after completing each scan. For debug
- *  only, will normally be false.     */
+/** Returns true if should upload the leaf list to the host after completing each scan. As currently implemented,
+ *  the central relaying functionality is not used so this will always be true.     */
 static inline bool mustUploadLeafList(void)
 {
-    //return (isCentral() && ((cfgs.value_3 & CONFIG_3_UPLOAD_LEAF_LIST_MASK) == CONFIG_3_UPLOAD_LEAF_LIST_MASK));
-    return true;
+    return ((cfgs.value_3 & CONFIG_3_UPLOAD_LEAF_LIST_MASK) == CONFIG_3_UPLOAD_LEAF_LIST_MASK);
 }
 
 static void upload_leaf_list(void)
@@ -2121,6 +2117,7 @@ static void main_task_function (void * pvParameter)
     nrf_drv_clock_lfclk_request(NULL);
 
     config_init(&cfgs);
+    SetAsCentral((cfgs.value_1 & CONFIG_1_CENTRAL_MASK) == CONFIG_1_CENTRAL_MASK);
 
     if (!isLedOnBroadcast())
     {
@@ -2133,6 +2130,7 @@ static void main_task_function (void * pvParameter)
     // case of a central device, it does not need to store any points, and
     // we wish to save memory to be used for relay buffering.
     TimedCircBuffer_Init(isCentral() ? 0 : 2500);
+    TimedCircBuffer_SetThreshold((cfgs.value_2 & 0x0FFFFUL) >> 0);
 
     nrf_gpio_cfg_output(SEN_ENABLE);
     nrf_gpio_pin_set(SEN_ENABLE); // accelerometer power off

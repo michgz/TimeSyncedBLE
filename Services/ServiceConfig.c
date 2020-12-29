@@ -14,6 +14,7 @@
 #include "fds.h"
 
 #include <string.h>
+#include <stdbool.h>
 
 // Use the same base UUID as for the NUS service.
 #define NUS_BASE_UUID                  SYNC_APP_UUID_BASE
@@ -27,6 +28,8 @@ static void nrf_qwr_error_handler(uint32_t nrf_error)
 {
     APP_ERROR_HANDLER(nrf_error);
 }
+
+static bool reset_on_disconnect = false;
 
 #define FILE_ID   0x8888
 #define REC_KEY_1   0x9999
@@ -123,6 +126,16 @@ uint16_t service_cfg_on_ble_evt(config_service_t *p_cfgs,
 
             }
             break;
+        case BLE_GAP_EVT_DISCONNECTED:
+            // We'll reset on the first disconnection after a non-volatile value being changed.
+            if (reset_on_disconnect)
+            {
+                reset_on_disconnect = false;
+
+                (void) sd_nvic_SystemReset();
+                while(true);
+            }
+
         default:
             ;
     }
@@ -137,6 +150,7 @@ void fds_handler(fds_evt_t const * p_evt)
     switch (p_evt->id)
     {
         case FDS_EVT_INIT:
+            reset_on_disconnect = false;
             ready = 1;
             break;
         case FDS_EVT_WRITE:
@@ -146,8 +160,7 @@ void fds_handler(fds_evt_t const * p_evt)
                 {
                     // A write or update has completed. Now reset to run with the new value.
 
-                    //(void) sd_nvic_SystemReset();
-                    //while(true);
+                    reset_on_disconnect = true;
                 }
             }
             break;

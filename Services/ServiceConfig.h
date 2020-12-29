@@ -71,15 +71,23 @@ typedef struct config_service_t
 
 /**  VALUE 1
  *   -------
- *   A byte-sized configuration item that is stored in non-volatile memory. Currently no bits are defined.
+ *   A byte-sized configuration item that is stored in non-volatile memory. The bits are defined as follows:
+ *
+ *    0     0=peripheral, 1=central
+ *    1-7   Reserved
+ *
  */
+
+#define CONFIG_1_CENTRAL_MASK  0x01
 
 #define   CONFIG_1_DEFAULT     0x00
 #define   CONFIG_1_LEN         sizeof(uint8_t)
 
 /**  VALUE 2
  *   -------
- *   A long-word-sized configuration item that is stored in non-volatile memory. Currently no bits are defined.
+ *   A long-word-sized configuration item that is stored in non-volatile memory. The bits are defined as follows:
+ *      0-15   Trigger threshold (units of g/1000 = 0.01 ms^-2)
+ *      16-31  Reserved
  */
 
 #define   CONFIG_2_DEFAULT     0x00000000
@@ -94,7 +102,7 @@ typedef struct config_service_t
 #define CONFIG_3_SIMPLE_TRIGGER_MASK 0x02
 #define CONFIG_3_UPLOAD_LEAF_LIST_MASK 0x08
 
-#define CONFIG_3_DEFAULT     (CONFIG_3_SIMPLE_TRIGGER_MASK|CONFIG_3_UPLOAD_LEAF_LIST_MASK)
+#define CONFIG_3_DEFAULT     (0|CONFIG_3_UPLOAD_LEAF_LIST_MASK)
 
 
 
