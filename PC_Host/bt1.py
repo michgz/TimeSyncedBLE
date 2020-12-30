@@ -40,16 +40,18 @@ INSTRUCTION_CODE__IDENTIFY_SELF = 0x23
 
 
 rxed_data = b''
+rxed_data_2 = b''
 dev_list = []
 do_dev_list = False
 is_leaf_locked = False
+trigger_size = 0
 
 def notification_handler_leaf(sender, data):
   
     global rxed_data
     global dev_list
     global do_dev_list
-    global is_leaf_locked
+    global trigger_size
     
     if len(data) >= 8:
       if struct.unpack('<I', data[0:4])[0] == 0x0000001A:
@@ -69,16 +71,25 @@ def notification_handler_leaf(sender, data):
           dev_list = devs
           #print(dev_list)
           do_dev_list = True
-      if struct.unpack('<I', data[0:4])[0] == 0x8000000B:
-        res_dev = struct.unpack('<I', data[4:8])[0]
-        is_leaf_locked = (res_dev != 0)
+      if struct.unpack('<I', data[0:4])[0] == 0x80000022:
+        trigger_size = struct.unpack('<I', data[4:8])[0]
+
           
     """Simple notification handler which prints the data received."""
     rxed_data += data
     print("{0}: {1}".format(sender, data))
 
 def notification_handler_leaf_2(sender, data):
-  
+    global rxed_data_2
+    global is_leaf_locked
+    
+    if len(data) >= 8:
+      if struct.unpack('<I', data[0:4])[0] == 0x8000000B:
+        res_dev = struct.unpack('<I', data[4:8])[0]
+        is_leaf_locked = (res_dev != 0)
+    
+    rxed_data_2 += data
+    
     """Simple notification handler which prints the data received."""
     print("        {0}: {1}".format(sender, data))
 
@@ -86,9 +97,11 @@ def notification_handler_leaf_2(sender, data):
 async def run_specific_device_leaf(addr, debug=False):
   
     global rxed_data
+    global rxed_data_2
     global dev_list
     global do_dev_list
     global is_leaf_locked
+    global trigger_size
     
     if debug:
         import sys
@@ -152,10 +165,33 @@ async def run_specific_device_leaf(addr, debug=False):
           #await asyncio.sleep(0.2)
 
         a = 0
+        kk = 0
         while a < 1000:
           await asyncio.sleep(1.0)
+          
           if do_dev_list:
             do_dev_list = False
+            for dd in dev_list:
+              async with bleak.BleakClient(dd) as client_2:
+                x_2 = await client.is_connected()
+                l.info("Connected: {0}".format(x_2))
+                await client_2.start_notify(READ_CHAR_UUID, notification_handler_leaf_2)
+                await asyncio.sleep(1.2)
+                await client_2.write_gatt_char(WRITE_CHAR_UUID, bytearray(struct.pack('<2I', INSTRUCTION_CODE__QUERY_IS_SYNCED, 0)))  # no data, just send 0
+                await asyncio.sleep(0.2)
+                await client_2.write_gatt_char(WRITE_CHAR_UUID, bytearray(struct.pack('<2I', INSTRUCTION_CODE__QUERY_CURRENT_TIME, 0)))  # no data, just send 0
+                await asyncio.sleep(0.2)
+                await client_2.write_gatt_char(WRITE_CHAR_UUID, bytearray(struct.pack('<2I', INSTRUCTION_CODE__IS_LOCKED, 0)))  # no data, just send 0
+                await asyncio.sleep(0.4)
+                
+                await client_2.stop_notify(READ_CHAR_UUID)
+
+                z_2 = await client_2.disconnect()
+                l.info("Disconnected: {0}".format(z_2))
+          if trigger_size > 0:
+            with open("Trigger_list.txt", "a") as f3:
+              f3.write(datetime.datetime.now().strftime("%Y/%m/%d %H:%M:%S  ") + "{0}   {1}\n".format(trigger_size, len(dev_list)))
+            trigger_size = 0
             for dd in dev_list:
               async with bleak.BleakClient(dd) as client_2:
                 x_2 = await client.is_connected()
@@ -170,17 +206,18 @@ async def run_specific_device_leaf(addr, debug=False):
                 await client_2.write_gatt_char(WRITE_CHAR_UUID, bytearray(struct.pack('<2I', INSTRUCTION_CODE__IS_LOCKED, 0)))  # no data, just send 0
                 await asyncio.sleep(0.4)
                 if is_leaf_locked:
-                  rxed_data = b''
+                  rxed_data_2 = b''
                   await client_2.write_gatt_char(WRITE_CHAR_UUID, bytearray(struct.pack('<2I', INSTRUCTION_CODE__READ_OUT, 0)))  # no data, just send 0
                   await asyncio.sleep(5.2)
-                  if len(rxed_data) > 0:
-                    with open(datetime.datetime.now().strftime("%Y%m%d_%H%M%S_")+dd+".bin", "wb") as f1:
-                      f1.write(rxed_data)
+                  if len(rxed_data_2) > 0:
+                    with open(datetime.datetime.now().strftime("%Y%m%d_%H%M%S_")+"{0:03d}_".format(kk)+dd+".bin", "wb") as f1:
+                      f1.write(rxed_data_2)
                 
                 await client_2.stop_notify(READ_CHAR_UUID)
 
                 z_2 = await client_2.disconnect()
                 l.info("Disconnected: {0}".format(z_2))
+            kk += 1
           a += 1
         
         # Now save any data that has been received
