@@ -82,6 +82,8 @@ async def run_all_devices(debug=False):
             print(t_2)
             
             
+            is_central = False
+            
             if len(t_0) >= 1:
                 is_central = ((t_0[0] & 0x01) != 0)
                 if is_central:
@@ -98,6 +100,7 @@ async def run_all_devices(debug=False):
                       
                   if k_s == 1:
                       await client.write_gatt_char(w_char[0], bytearray(b'\x00'))
+                      is_central = False
                       print("Changed")
                 else:
                   print("This is a peripheral device. Choose:")
@@ -114,9 +117,27 @@ async def run_all_devices(debug=False):
                   if k_s == 2:
                       await client.write_gatt_char(w_char[0], bytearray(b'\x01'))
                       print("Changed")
+                      is_central = True
                       
                   
-            
+            if len(t_1) >= 4 and is_central:
+                val_2 = struct.unpack('<I', t_1)[0]
+                print("This is a central device with trigger threshold {0}.".format(0x3FFF & val_2))
+                print("Enter a new value, or <Enter> to keep old one:")
+                
+                s = input()
+                
+                try:
+                    k_s = int(s)
+                except ValueError:
+                    k_s = -1
+                      
+                if k_s >= 0:
+                    new_val = (val_2 & 0xFFFFC000 ) | (k_s & 0x3FFF)
+                    await client.write_gatt_char(w_char[1], bytearray(struct.pack('<I', new_val)))
+                    print("Changed")
+                else:
+                    print("No change")
 
             z = await client.disconnect()
             logger.info("Disconnected: {0}".format(z))

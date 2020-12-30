@@ -667,7 +667,7 @@ void trigger(uint32_t size)
     {
 
         /* If simple trigger upload is selected, upload the magnitude and take no other action.  */
-        if (uploadSimpleTrigger())
+        if (LeafListCount() == 0 || uploadSimpleTrigger())
         {
             doTriggerUpload();
         }
