@@ -19,14 +19,15 @@
 #include <math.h>
 #include "boards.h"
 #include "nordic_common.h"
-#include "FreeRTOS.h"
-#include "task.h"
-#include "timers.h"
 #ifdef FREERTOS
+    #include "FreeRTOS.h"
+    #include "task.h"
+    #include "timers.h"
     #include "nrf_sdh_freertos.h"
 #endif
 #include "bsp.h"
 #include "nrf_drv_clock.h"
+#include "nrf.h"
 #include "sdk_errors.h"
 #include "app_error.h"
 #include "nrf_sdh.h"
@@ -46,10 +47,13 @@
 #include "nrf_ble_gatt.h"
 #include "nrf_ble_qwr.h"
 #include "app_timer.h"
+#include "app_util_platform.h"
+#include "bsp_btn_ble.h"
 #include "nrf_pwr_mgmt.h"
 #include "nrf_drv_timer.h"
 #include "nrf_ble_scan.h"
 #include "nrf_delay.h"
+#include "nrf_timer.h"
 
 #include "nrf_drv_gpiote.h"
 #include "nrf_gpiote.h"
@@ -68,8 +72,8 @@
 #include "HwSensor.h"
 
 
-#define NRF_LOG_MODULE_NAME main
-#define NRF_LOG_LEVEL 4
+//#define NRF_LOG_MODULE_NAME main
+//#define NRF_LOG_LEVEL 4
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
@@ -90,10 +94,12 @@
 #define PERIPHERAL_DEVICE_NAME          "nRF_Node"
 #define AMTS_SERVICE_UUID_TYPE          BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
 
-#define APP_ADV_INTERVAL                MSEC_TO_UNITS(500, UNIT_1_25_MS)             /**< The advertising interval (in units of 0.625 ms). This value corresponds to 187.5 ms. */
+#define APP_BLE_OBSERVER_PRIO           3
+
+#define APP_ADV_INTERVAL                64/*MSEC_TO_UNITS(500, UNIT_1_25_MS)*/             /**< The advertising interval (in units of 0.625 ms). This value corresponds to 187.5 ms. */
 
 #define APP_ADV_DURATION_FIRST          400                                         /**< The advertising duration (180 seconds) in units of 10 milliseconds of the first advertising period. */
-#define APP_ADV_DURATION                800                                         /**< The advertising duration (180 seconds) in units of 10 milliseconds of all subsequent periods. */
+#define APP_ADV_DURATION                18000                                       /**< The advertising duration (180 seconds) in units of 10 milliseconds of all subsequent periods. */
 
 #define APP_BLE_CONN_CFG_TAG            1                                           /**< Tag that identifies the SoftDevice BLE configuration. */
 
@@ -481,6 +487,16 @@ static void services_init(void)
     err_code = nrf_ble_qwr_init(&m_qwr[0], &qwr_init);
     APP_ERROR_CHECK(err_code);
 
+    // Add the base UUID. Don't do anything with it for now, the individual services
+    //  will be using it.
+    ble_uuid128_t         sync_app_base_uuid = {SYNC_APP_UUID_BASE};
+    uint8_t               uuid_type;
+    
+    err_code = sd_ble_uuid_vs_add(&sync_app_base_uuid, &uuid_type);
+    APP_ERROR_CHECK(err_code);
+    
+    (void) uuid_type;
+
     //err_code = ble_debug_service_init(&m_dbg);
     //APP_ERROR_CHECK(err_code);
 
@@ -574,6 +590,7 @@ static void conn_params_init(void)
  *
  * @note This function will not return.
  */
+__attribute__ (( unused ))
 static void sleep_mode_enter(void)
 {
     uint32_t err_code = bsp_indication_set(BSP_INDICATE_IDLE);
@@ -595,12 +612,13 @@ static void sleep_mode_enter(void)
  *
  * @param[in]   nrf_error   Error code containing information about what went wrong.
  */
+__attribute__ (( unused ))
 static void service_error_handler(uint32_t nrf_error)
 {
     APP_ERROR_HANDLER(nrf_error);
 }
 
-static void check_manu_data(char const * x, int len)
+static void check_manu_data(unsigned char const * x, int len)
 {
     // Check if manufacturer data meets the expected format.
     if (len >= 2 + /*sizeof(BroadcastData_T)*/ 5)
@@ -767,6 +785,7 @@ static bool doNextConnection(void)
     return false;
 }
 
+__attribute__ (( unused ))
 static bool doConnectionAndDownload(void)
 {
     // If any found, then connect to them
@@ -929,13 +948,13 @@ static void scan_init(void)
         err_code = nrf_ble_scan_init(&m_scan, &init_scan, scan_evt_handler);
         APP_ERROR_CHECK(err_code);
 
-        //if (strlen(m_target_periph_name) != 0)
-        //{
-        //    err_code = nrf_ble_scan_filter_set(&m_scan, 
-        //                                       SCAN_NAME_FILTER, 
-        //                                       m_target_periph_name);
-        //    APP_ERROR_CHECK(err_code);
-        //}
+        if (strlen(m_target_periph_name) != 0)
+        {
+            err_code = nrf_ble_scan_filter_set(&m_scan, 
+                                               SCAN_NAME_FILTER, 
+                                               m_target_periph_name);
+            APP_ERROR_CHECK(err_code);
+        }
 
         err_code = nrf_ble_scan_filter_set(&m_scan, SCAN_UUID_FILTER, &m_scan_uuid);
         APP_ERROR_CHECK(err_code);
@@ -1080,6 +1099,7 @@ static void adv_scan_start(void)
 }
 
 
+#if 0
 /**@brief Function for handling Peer Manager events.
  *
  * @param[in] p_evt  Peer Manager event.
@@ -1100,6 +1120,7 @@ static void pm_evt_handler(pm_evt_t const * p_evt)
             break;
     }
 }
+#endif // 0
 
 static void on_sync_timer_timeout(void * p_context)
 {
@@ -1229,6 +1250,8 @@ static void on_adv_evt_broadcast(ble_adv_evt_t ble_adv_evt)
             }
             break;
     }
+
+    (void) err_code;
 }
 
 static BroadcastData_T BroadcastData = {{0xDE, 0xAD, 0xBE, 0xEF}, BroadcastType_Invalid, 0};
@@ -1261,7 +1284,7 @@ static ret_code_t BroadcastAdvertising_SetUp(ble_advertising_t * const p_adverti
 
         init.evt_handler = on_adv_evt;
 
-    err_code = ble_advertising_init(&m_advertising, &init);
+    err_code = ble_advertising_init(p_advertising, &init);
     APP_ERROR_CHECK(err_code);
 
     }
@@ -1285,13 +1308,13 @@ static ret_code_t BroadcastAdvertising_SetUp(ble_advertising_t * const p_adverti
 
         init.evt_handler = on_adv_evt_broadcast;
 
-    err_code = ble_advertising_init(&m_advertising, &init);
+    err_code = ble_advertising_init(p_advertising, &init);
     APP_ERROR_CHECK(err_code);
     }
 
 
 
-    ble_advertising_conn_cfg_tag_set(&m_advertising, APP_BLE_CONN_CFG_TAG);
+    ble_advertising_conn_cfg_tag_set(p_advertising, APP_BLE_CONN_CFG_TAG);
 
     return err_code;
 }
@@ -1348,6 +1371,7 @@ NRF_PWR_MGMT_HANDLER_REGISTER(shutdown_handler, APP_SHUTDOWN_HANDLER_PRIORITY);
  *
  * @param[in] p_ble_evt Bluetooth stack event.
  */
+__attribute__ (( unused ))
 static bool ble_evt_is_advertising_timeout(ble_evt_t const * p_ble_evt)
 {
     return (p_ble_evt->header.evt_id == BLE_GAP_EVT_ADV_SET_TERMINATED);
@@ -1663,7 +1687,11 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
             }
 #endif // 0
         } break;
+        default:
+            break;
     }
+
+    (void) err_code;
 }
 
 
@@ -1863,6 +1891,7 @@ static void ble_stack_init(void)
     NRF_SDH_BLE_OBSERVER(m_ble_observer, APP_BLE_OBSERVER_PRIO, ble_evt_handler, NULL);
 }
 
+#if 0
 /**@brief Function for initializing the Peer Manager.
  */
 static void peer_manager_init(void)
@@ -1895,6 +1924,7 @@ static void peer_manager_init(void)
     err_code = pm_register(pm_evt_handler);
     APP_ERROR_CHECK(err_code);
 }
+#endif // 0
 
 
 /**@brief Clear bond information from persistent storage.
@@ -1910,13 +1940,15 @@ static void delete_bonds(void)
         //err_code = pm_peers_delete();
         //APP_ERROR_CHECK(err_code);
     }
+
+    (void) err_code;
 }
 
 
 /**@brief Function for handling events from the GATT library. */
 void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const * p_evt)
 {
-    if (p_evt->evt_id == NRF_BLE_GATT_EVT_ATT_MTU_UPDATED)
+    if ((m_conn_handle == p_evt->conn_handle) && (p_evt->evt_id == NRF_BLE_GATT_EVT_ATT_MTU_UPDATED))
     {
         //m_ble_nus_max_data_len = p_evt->params.att_mtu_effective - OPCODE_LENGTH - HANDLE_LENGTH;
         //NRF_LOG_INFO("Data len is set to 0x%X(%d)", m_ble_nus_max_data_len, m_ble_nus_max_data_len);
@@ -1956,7 +1988,6 @@ void gatt_init(void)
  */
 void bsp_event_handler(bsp_event_t event)
 {
-    uint32_t err_code;
     switch (event)
     {
         default:
@@ -1978,8 +2009,6 @@ static void advertising_init(void)
  */
 static void buttons_leds_init(bool * p_erase_bonds)
 {
-    bsp_event_t startup_event;
-
     uint32_t err_code = bsp_init(BSP_INIT_NONE   /*| BSP_INIT_LEDS*/ /*| BSP_INIT_BUTTONS*/, bsp_event_handler);
     APP_ERROR_CHECK(err_code);
 
@@ -2112,6 +2141,7 @@ static void main_task_function (void * pvParameter)
 {
     ret_code_t err_code = NRF_SUCCESS;
 
+    // Initialise.
     log_init();
 
     nrf_drv_clock_lfclk_request(NULL);
@@ -2132,6 +2162,7 @@ static void main_task_function (void * pvParameter)
     TimedCircBuffer_Init(isCentral() ? 0 : 2500);
     TimedCircBuffer_SetThreshold((cfgs.value_2 & 0x0FFFFUL) >> 0);
 
+/*
     nrf_gpio_cfg_output(SEN_ENABLE);
     nrf_gpio_pin_set(SEN_ENABLE); // accelerometer power off
     nrf_delay_ms(450);   // give time to reset
@@ -2152,7 +2183,7 @@ static void main_task_function (void * pvParameter)
           //  read_regs(LIS2DH_OUT_X_L);
         }
     }
-
+*/
     //Configure all leds on board.
     bsp_board_init(BSP_INIT_LEDS);
 
@@ -2176,6 +2207,7 @@ static void main_task_function (void * pvParameter)
     services_init();
     advertising_init();
     scan_init();
+    conn_params_init();
 
 
     if (isUseSyncTimer())
@@ -2183,6 +2215,8 @@ static void main_task_function (void * pvParameter)
         sync_timer_init();
     }
 
+    // Start execution.
+    NRF_LOG_INFO("Debug logging for SYNC app over RTT started.");
     err_code = app_timer_create(&m_sync_timer, APP_TIMER_MODE_SINGLE_SHOT, on_sync_timer_timeout);
     APP_ERROR_CHECK(err_code);
 
@@ -2202,11 +2236,19 @@ static void main_task_function (void * pvParameter)
         adv_scan_start();
     }
 
+    ble_gap_addr_t addr;
+    (void) sd_ble_gap_addr_get(&addr);
+    
+    NRF_LOG_INFO("Addr: %x:%x:%x:%x:%x:%x", addr.addr[5], addr.addr[4], addr.addr[3], addr.addr[2], addr.addr[1], addr.addr[0]);
+
+
     // Enter main loop.
     for (;;)
     {
         idle_state_handle();
     }
+
+    (void) err_code;
 }
 
 
@@ -2214,16 +2256,14 @@ static void main_task_function (void * pvParameter)
  * ==================  START OF FREERTOS STUFF ============================================
  */
 
-extern void InitializeUserMemorySections(void);  // Machine code routine to initialise memory. 
-
-TaskHandle_t  main_task_handle;   /**< Reference to main FreeRTOS task. */
-
 int main(void)
 {
     ret_code_t err_code;
 
-    /* Set up the SDK's memory sections   */
+    /* Set up the SDK's memory sections - only when building under SES  */
+    #if 0
     InitializeUserMemorySections();
+    #endif
 
     /* Run unit tests before starting any hardware stuff.  */
     TimedCircBuffer_UnitTests();
@@ -2234,6 +2274,9 @@ int main(void)
 
     /* Configure LED-pins as outputs */
     bsp_board_init(BSP_INIT_LEDS);
+
+
+    (void) err_code;
 
     /* At the moment is working fine with only 1 task. Add more here if needed...  */
 

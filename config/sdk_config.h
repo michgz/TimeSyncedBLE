@@ -599,7 +599,7 @@
 // <e> BLE_NUS_ENABLED - ble_nus - Nordic UART Service
 //==========================================================
 #ifndef BLE_NUS_ENABLED
-#define BLE_NUS_ENABLED 1
+#define BLE_NUS_ENABLED 0
 #endif
 // <e> BLE_NUS_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
@@ -3955,7 +3955,7 @@
 // <e> NRFX_TIMER_ENABLED - nrfx_timer - TIMER periperal driver
 //==========================================================
 #ifndef NRFX_TIMER_ENABLED
-#define NRFX_TIMER_ENABLED 1
+#define NRFX_TIMER_ENABLED 0
 #endif
 // <q> NRFX_TIMER0_ENABLED  - Enable TIMER0 instance
  
@@ -3968,7 +3968,7 @@
  
 
 #ifndef NRFX_TIMER1_ENABLED
-#define NRFX_TIMER1_ENABLED 1
+#define NRFX_TIMER1_ENABLED 0
 #endif
 
 // <q> NRFX_TIMER2_ENABLED  - Enable TIMER2 instance
@@ -7669,7 +7669,7 @@
  
 
 #ifndef NRF_FPRINTF_ENABLED
-#define NRF_FPRINTF_ENABLED 0
+#define NRF_FPRINTF_ENABLED 1
 #endif
 
 // <q> NRF_FPRINTF_FLAG_AUTOMATIC_CR_ON_LF_ENABLED  - For each printed LF, function will add CR.
@@ -7698,7 +7698,7 @@
 // <e> NRF_LOG_BACKEND_RTT_ENABLED - nrf_log_backend_rtt - Log RTT backend
 //==========================================================
 #ifndef NRF_LOG_BACKEND_RTT_ENABLED
-#define NRF_LOG_BACKEND_RTT_ENABLED 0
+#define NRF_LOG_BACKEND_RTT_ENABLED 1
 #endif
 // <o> NRF_LOG_BACKEND_RTT_TEMP_BUFFER_SIZE - Size of buffer for partially processed strings. 
 // <i> Size of the buffer is a trade-off between RAM usage and processing.

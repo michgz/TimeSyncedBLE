@@ -265,6 +265,8 @@ static void on_write(nrf_ble_amts_t * p_ctx, ble_evt_t const * p_ble_evt)
         evt.params.rx_data.length = p_evt_write->len;
 
         p_ctx->data_handler(&evt);
+
+        (void) err_code;
     }
     else
     {
@@ -361,6 +363,8 @@ static void amts_data_handler(nrf_ble_amts_evt_t * p_evt)
             }
             else {(void) TimedCircBuffer_RxOperation(op[0], op[1]);}
         }
+
+        (void) err_code;
     }
 
 }
@@ -473,6 +477,7 @@ static void init_random(void)
     srand(0);
 }
 
+__attribute__ (( unused ))
 static void fill_randomly(char * buf, const int len)
 {
     int i;

@@ -547,6 +547,7 @@ void SWI3_EGU3_IRQHandler(void)
     }
 }
 
+#ifdef DEBUG
 #define G_BUFF_N   (6)
 static volatile sync_pkt_t g_buff[G_BUFF_N];
 static unsigned int g_buff_ptr = 0;
@@ -558,10 +559,10 @@ static void add_g(sync_pkt_t * in)
     memcpy((uint8_t *)&g_buff[g_buff_ptr], (uint8_t *)in, sizeof(sync_pkt_t));
     g_buff_ptr ++;
 }
-
+#endif
 
 static volatile uint32_t records[4] = {0,0,0,0};
-static unsigned int rec_ptr = 0;
+//static unsigned int rec_ptr = 0;
 
 static void debug_record_new_offset(uint32_t x)
 {

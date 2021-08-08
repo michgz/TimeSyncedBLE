@@ -20,7 +20,7 @@ static uint32_t the_value [4];
 uint32_t ble_debug_service_init(ble_dbg_t * p_dbg)
 {
     uint32_t            err_code;
-    ble_uuid128_t       nus_base_uuid = NUS_BASE_UUID;
+    ble_uuid128_t       nus_base_uuid = {NUS_BASE_UUID};
     ble_uuid_t          ble_uuid;
     ble_gatts_char_md_t char_md;
     ble_gatts_attr_t    attr_value;

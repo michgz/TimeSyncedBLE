@@ -63,8 +63,11 @@ void on_scan_list_scan_evt(scan_evt_t const * p_scan_evt)
             add_leaf_list((ble_gap_addr_t *) &p_adv->peer_addr, p_scan_param, p_adv->rssi);
 
         } break;
+        default:
+            break;
     }
 
+    (void) err_code;
 
 }
 

@@ -55,6 +55,7 @@ void hw_timers_stop(void)
 }
 
 
+#if 0
 static volatile uint64_t tt[32];
 static volatile uint32_t ty[32];
 static unsigned int tt_ptr = 0U;
@@ -65,6 +66,7 @@ static void add_tt(uint64_t x, uint32_t y)
     tt[tt_ptr] = x;
     ty[tt_ptr ++] = y;
 }
+#endif // 0
 
 extern bool IsAwake(void);
 
@@ -115,12 +117,14 @@ void TIMER4_IRQHandler(void)
         // Clear the event
         nrf_timer_event_clear(NRF_TIMER4, NRF_TIMER_EVENT_COMPARE1);
 
+#if 0
 #ifdef PERIPHERAL
         uint64_t time = ts_timestamp_get_ticks_u64(6);   // time in units of 1/16MHz.
 #endif
 
 
         //add_tt(time,NRF_TIMER4->CC[1]);
+#endif // 0
 
     }
 
@@ -331,6 +335,7 @@ void led_identification_seq_init(void)
     uint32_t task = nrf_drv_pwm_simple_playback(&m_pwm0, &seq0, 1,
                                        NRF_DRV_PWM_FLAG_STOP);
 
+    (void) task;
 
 
 }
@@ -342,4 +347,5 @@ void realign_led_flash(void)
     uint64_t time = ts_timestamp_get_ticks_u64(6);   // time in units of 1/16MHz.
     uint64_t  modulo = time % 16000000*10;  // Where in the LED flash sequence we should be
 
+    (void) modulo;
 }

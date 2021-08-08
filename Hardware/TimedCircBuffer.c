@@ -53,7 +53,7 @@ typedef struct buf_tag
     XYZ_T               vals [1];
 } buf_T;
 
-//static _name ## _T  _name = {(_size),(_size)/4,sizeof(XYZ_T),false,0U,false};  \
+//static _name ## _T  _name = {(_size),(_size)/4,sizeof(XYZ_T),false,0U,false};
 
 buf_T * p_Buf;
 
@@ -601,12 +601,14 @@ bool TimedCircBuffer_FifoFill(app_fifo_t * const p_fifo)
     return false;
 }
 
+#if 0
 static uint32_t length_of_buffer_in_time_steps(buf_T * p_buf)
 {
     // Time to fill the buffer (125Hz samples) in units of 500Hz.
 
     return ((p_buf->size) / 125) * 500;
 }
+#endif
 
 static bool lock_buffer_at_time_point(buf_T * p_buf, uint32_t time_point)
 {

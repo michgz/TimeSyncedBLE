@@ -306,6 +306,8 @@ static uint8_t read_regs(uint8_t addr)
 
     err_code = nrf_drv_twi_xfer(&m_twi, &xfer, flags);
     APP_ERROR_CHECK(err_code);
+
+    return NRF_SUCCESS;
 }
 
 #define PIN_IN      INT_ACCEL_1
@@ -409,6 +411,11 @@ void sensor_on(void)
     x3 = read_reg(LIS2DH_CTRL_REG3);
     nrf_delay_ms(15);
 
+    (void) x1;
+    (void) x2;
+    (void) x3;
+
+
     read_regs(LIS2DH_OUT_X_L);
 
     nrf_drv_gpiote_in_event_enable(PIN_IN, true);
@@ -463,8 +470,8 @@ void timer_led_init(void)
  */
 void timer_led_event_handler(nrf_timer_event_t event_type, void* p_context)
 {
-    static uint32_t i;
-    uint32_t led_to_invert = 0;//((i++) % LEDS_NUMBER);
+    //static uint32_t i;
+    //uint32_t led_to_invert = 0;//((i++) % LEDS_NUMBER);
 
     switch (event_type)
     {
@@ -503,6 +510,8 @@ void timer_led_event_handler(nrf_timer_event_t event_type, void* p_context)
 
             // Get and clear the number of reads since the last timer event
             uint32_t count = nrf_atomic_u32_fetch_store(&count_of_Accelerometer_reads, 0U);
+
+            (void) count;
 
 
             /* If the level is high for two consecutive ticks with no interrupts between then something

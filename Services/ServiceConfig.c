@@ -49,7 +49,7 @@ uint16_t service_cfg_on_ble_evt(config_service_t *p_cfgs,
                 ret_code_t err_code;
                 ble_gatts_evt_write_t const * p_write = &p_ble_evt->evt.gatts_evt.params.write;
 
-                if (p_write->handle == p_cfgs->value_1_handles.value_handle & p_write->len >= CONFIG_1_LEN && p_write->op != BLE_GATTS_OP_INVALID)
+                if (p_write->handle == p_cfgs->value_1_handles.value_handle && p_write->len >= CONFIG_1_LEN && p_write->op != BLE_GATTS_OP_INVALID)
                 {
                     static uint32_t new_value = 0U; // Static because fds_...() functions are queued
                     ((uint32_t *)&new_value)[0] = p_write->data[0];
@@ -86,7 +86,7 @@ uint16_t service_cfg_on_ble_evt(config_service_t *p_cfgs,
                         APP_ERROR_CHECK(err_code);
                     }
                 }
-                else if (p_write->handle == p_cfgs->value_2_handles.value_handle & p_write->len >= CONFIG_2_LEN && p_write->op != BLE_GATTS_OP_INVALID)
+                else if (p_write->handle == p_cfgs->value_2_handles.value_handle && p_write->len >= CONFIG_2_LEN && p_write->op != BLE_GATTS_OP_INVALID)
                 {
                     static uint32_t new_value = 0U;   // Static because fds_...() functions are queued.
                     ((uint32_t *)&new_value)[0] = p_write->data[0];
@@ -299,7 +299,7 @@ ret_code_t service_config_init(service_config_init_t * p_cfgs_init, config_servi
     p_ctx->conn_handle   = BLE_CONN_HANDLE_INVALID;
 
     // Add service.
-    ble_uuid128_t base_uuid = NUS_BASE_UUID;
+    ble_uuid128_t base_uuid = {SYNC_APP_UUID_BASE};
     err_code = sd_ble_uuid_vs_add(&base_uuid, &p_ctx->uuid_type);
     VERIFY_SUCCESS(err_code);
 
