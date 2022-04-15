@@ -45,9 +45,8 @@
       macros="CMSIS_CONFIG_TOOL=$(SdkDir)/external_tools/cmsisconfig/CMSIS_Configuration_Wizard.jar;SdkDir=nRF5_SDK_16.0.0_98a08e2"
       project_directory=""
       project_type="Executable"
-      target_get_partname_script="GetPartName()"
       target_reset_script="Reset();"
-      target_script_file="$(ProjectDir)/ses/nRF_Target.js"
+      target_script_file="$(TargetsDir)/nRF51/nRF51_Target.js"
       target_trace_initialize_script="EnableTrace(&quot;$(TraceInterfaceType)&quot;)" />
     <configuration
       Name="Flash"
@@ -223,6 +222,7 @@
     <folder Name="nRF_Drivers">
       <file file_name="$(SdkDir)/integration/nrfx/legacy/nrf_drv_twi.c" />
       <file file_name="$(SdkDir)/integration/nrfx/legacy/nrf_drv_clock.c" />
+      <file file_name="$(SdkDir)/integration/nrfx/legacy/nrf_drv_uart.c" />
       <file file_name="$(SdkDir)/modules/nrfx/soc/nrfx_atomic.c" />
       <file file_name="$(SdkDir)/modules/nrfx/drivers/src/nrfx_clock.c" />
       <file file_name="$(SdkDir)/modules/nrfx/drivers/src/nrfx_gpiote.c" />

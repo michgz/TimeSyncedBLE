@@ -242,6 +242,8 @@ enum
     INSTRUCTION_CODE__QUERY_SYNC_DEBUGS = 0x13,
     INSTRUCTION_CODE__QUERY_CURRENT_TIME = 0x16,
 
+    INSTRUCTION_CODE__TRIGGER = 0x27,
+
     TRANSMIT_CODE__DATA = 0x80,
 
 };
@@ -617,7 +619,7 @@ static bool lock_buffer_at_time_point(buf_T * p_buf, uint32_t time_point)
 
     uint32_t start = 0, end = 0;
 
-    if (!p_buf->has_wrapped)
+    if (!p_buf->has_wrapped && time_point != 0xFFFFFFFFUL)
     {
         // If not wrapped, then we don't know the latest time base. Cannot use.
 
@@ -887,6 +889,17 @@ bool TimedCircBuffer_RxOperation(uint32_t code, uint32_t data)
         case INSTRUCTION_CODE__IDENTIFY_SELF:
             {
                 led_identification_seq_init();
+            }
+            break;
+        case INSTRUCTION_CODE__TRIGGER:
+            {
+                // Only react if this is a central device
+                if (publicIsCentral())
+                {
+                    trigger(0x1000);
+                }
+                uint32_t resp[2] = {INSTRUCTION_CODE__TRIGGER + 0x80000000UL, 0x00000000};
+                amts_queue_tx_data((uint8_t *) resp, 2*sizeof(uint32_t));
             }
             break;
         case INSTRUCTION_CODE__READ_OUT:

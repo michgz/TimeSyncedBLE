@@ -94,9 +94,9 @@
 #define PERIPHERAL_DEVICE_NAME          "nRF_Node"
 #define AMTS_SERVICE_UUID_TYPE          BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
 
-#define APP_BLE_OBSERVER_PRIO           3
+#define APP_BLE_OBSERVER_PRIO           3                                           /**< Application's BLE observer priority. You shouldn't need to modify this value. */
 
-#define APP_ADV_INTERVAL                64/*MSEC_TO_UNITS(500, UNIT_1_25_MS)*/             /**< The advertising interval (in units of 0.625 ms). This value corresponds to 187.5 ms. */
+#define APP_ADV_INTERVAL                MSEC_TO_UNITS(500, UNIT_1_25_MS)            /**< The advertising interval (in units of 0.625 ms). This value corresponds to 500 ms. */
 
 #define APP_ADV_DURATION_FIRST          400                                         /**< The advertising duration (180 seconds) in units of 10 milliseconds of the first advertising period. */
 #define APP_ADV_DURATION                18000                                       /**< The advertising duration (180 seconds) in units of 10 milliseconds of all subsequent periods. */
@@ -270,13 +270,15 @@ static void do_sleep(void)
         isAwake = false;
 
         scan_stop();
+        hw_timers_stop();
+        led_flash_seq_stop();
+
+        sensor_off();
+
         if (isUseSyncTimer())
         {
             sync_timer_stop();
         }
-
-        led_flash_seq_stop();
-        sensor_off();
         gpio_off();
     }
 }
@@ -1284,8 +1286,8 @@ static ret_code_t BroadcastAdvertising_SetUp(ble_advertising_t * const p_adverti
 
         init.evt_handler = on_adv_evt;
 
-    err_code = ble_advertising_init(p_advertising, &init);
-    APP_ERROR_CHECK(err_code);
+        err_code = ble_advertising_init(p_advertising, &init);
+        APP_ERROR_CHECK(err_code);
 
     }
     else
@@ -1308,8 +1310,8 @@ static ret_code_t BroadcastAdvertising_SetUp(ble_advertising_t * const p_adverti
 
         init.evt_handler = on_adv_evt_broadcast;
 
-    err_code = ble_advertising_init(p_advertising, &init);
-    APP_ERROR_CHECK(err_code);
+        err_code = ble_advertising_init(p_advertising, &init);
+        APP_ERROR_CHECK(err_code);
     }
 
 
@@ -1369,7 +1371,7 @@ NRF_PWR_MGMT_HANDLER_REGISTER(shutdown_handler, APP_SHUTDOWN_HANDLER_PRIORITY);
 
 /**@brief Function for checking whether a bluetooth stack event is an advertising timeout.
  *
- * @param[in] p_ble_evt Bluetooth stack event.
+ * @param[in]   p_ble_evt   Bluetooth stack event.
  */
 __attribute__ (( unused ))
 static bool ble_evt_is_advertising_timeout(ble_evt_t const * p_ble_evt)
@@ -1882,6 +1884,7 @@ static void ble_stack_init(void)
     ble_cfg_t cfg;
     cfg.gatts_cfg.attr_tab_size.attr_tab_size = BLE_GATTS_ATTR_TAB_SIZE_DEFAULT + 1000;
     err_code = sd_ble_cfg_set(BLE_GATTS_CFG_ATTR_TAB_SIZE, &cfg, ram_start);
+    APP_ERROR_CHECK(err_code);
 
     // Enable BLE stack.
     err_code = nrf_sdh_ble_enable(&ram_start);
@@ -2146,6 +2149,19 @@ static void main_task_function (void * pvParameter)
 
     nrf_drv_clock_lfclk_request(NULL);
 
+    //Configure all leds on board.
+    bsp_board_init(BSP_INIT_LEDS);
+
+    hw_timers_init();
+
+    bool erase_bonds;
+
+    // Initialize.
+    buttons_leds_init(&erase_bonds);
+    power_management_init();
+
+    ble_stack_init();
+
     config_init(&cfgs);
     SetAsCentral((cfgs.value_1 & CONFIG_1_CENTRAL_MASK) == CONFIG_1_CENTRAL_MASK);
 
@@ -2162,7 +2178,8 @@ static void main_task_function (void * pvParameter)
     TimedCircBuffer_Init(isCentral() ? 0 : 2500);
     TimedCircBuffer_SetThreshold((cfgs.value_2 & 0x0FFFFUL) >> 0);
 
-/*
+
+
     nrf_gpio_cfg_output(SEN_ENABLE);
     nrf_gpio_pin_set(SEN_ENABLE); // accelerometer power off
     nrf_delay_ms(450);   // give time to reset
@@ -2183,21 +2200,10 @@ static void main_task_function (void * pvParameter)
           //  read_regs(LIS2DH_OUT_X_L);
         }
     }
-*/
-    //Configure all leds on board.
-    bsp_board_init(BSP_INIT_LEDS);
 
-    hw_timers_init();
 
-    bool erase_bonds;
-
-    // Initialize.
-    buttons_leds_init(&erase_bonds);
-    power_management_init();
-    ble_stack_init();
     gap_params_init(isCentral());
     gatt_init();
-    conn_params_init();
     if (isCentral())
     {
         db_discovery_init();
@@ -2208,7 +2214,6 @@ static void main_task_function (void * pvParameter)
     advertising_init();
     scan_init();
     conn_params_init();
-
 
     if (isUseSyncTimer())
     {

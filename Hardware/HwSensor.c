@@ -46,22 +46,15 @@ static const nrf_drv_twi_t m_twi = NRF_DRV_TWI_INSTANCE(TWI_INSTANCE_ID);
 /* Buffer for samples read from temperature sensor. */
 static uint8_t m_sample;
 
-/**
- * @brief Function for setting active mode on MMA7660 accelerometer.
- */
-void LIS2DH_set_mode(void)
+/* Supports two WHOAMI values: 0x33 and 0x44.     */
+static bool privateIsAccel44 = false;
+static bool isAccel44(void)
 {
-    ret_code_t err_code;
-
-    /* Writing to LIS2DH_CTRL_REG1 "0" set accelerometer sensor in NORMAL mode. */
-    uint8_t reg[2] = {LIS2DH_CTRL_REG1, NORMAL_MODE};
-    err_code = nrf_drv_twi_tx(&m_twi, LIS2DH_ADDR, reg, sizeof(reg), false);
-    APP_ERROR_CHECK(err_code);
-    while (m_xfer_done == false);
-
-    /* Writing to next byte. */
-    m_xfer_done = false;
-    // :
+    return privateIsAccel44;
+}
+static void setIsAccel44(bool _isAccel44)
+{
+    privateIsAccel44 = _isAccel44;
 }
 
 
@@ -302,7 +295,7 @@ static uint8_t read_regs(uint8_t addr)
                                                   (uint8_t*)&m_samples,
                                                   sizeof(m_samples));
 
-    uint32_t flags = NRF_DRV_TWI_FLAG_TX_NO_STOP | NRFX_TWIM_FLAG_HOLD_XFER;
+    uint32_t flags = NRF_DRV_TWI_FLAG_TX_NO_STOP | NRFX_TWIM_FLAG_HOLD_XFER | NRFX_TWIM_FLAG_REPEATED_XFER;
 
     err_code = nrf_drv_twi_xfer(&m_twi, &xfer, flags);
     APP_ERROR_CHECK(err_code);
@@ -349,6 +342,8 @@ void gpio_init(void)
 
 
 
+static bool is_sensor_active = false;
+
 void sensor_init(void)
 {
 
@@ -361,20 +356,38 @@ void sensor_init(void)
     (void)read_reg(LIS2DH_WHO_AM_I);
     NRF_LOG_FLUSH();
 
+    setIsAccel44(m_sample == 0x44);
+
     nrf_delay_ms(5);
     write_reg(LIS2DH_CTRL_REG1, 0x97 );  // Data Rate
     nrf_delay_ms(50);
     NRF_LOG_FLUSH();
 
-    nrf_delay_ms(5);
-    write_reg(LIS2DH_CTRL_REG4, 0x88 ); // High Resolution
-    nrf_delay_ms(50);
-    NRF_LOG_FLUSH();
+    if (isAccel44())
+    {
+        nrf_delay_ms(5);
+        write_reg(LIS2DH_CTRL_REG4, 0x01 ); // Interrupt enabled
+        nrf_delay_ms(50);
+        NRF_LOG_FLUSH();
+    }
+    else
+    {
+        nrf_delay_ms(5);
+        write_reg(LIS2DH_CTRL_REG4, 0x88 ); // High Resolution
+        nrf_delay_ms(50);
+        NRF_LOG_FLUSH();
+    }
 
-    nrf_delay_ms(5);
-    write_reg(LIS2DH_CTRL_REG3, 0x10 ); // Interrupt on new data available
-    nrf_delay_ms(50);
-    NRF_LOG_FLUSH();
+    if (isAccel44())
+    {
+    }
+    else
+    {
+        nrf_delay_ms(5);
+        write_reg(LIS2DH_CTRL_REG3, 0x10 ); // Interrupt on new data available
+        nrf_delay_ms(50);
+        NRF_LOG_FLUSH();
+    }
 
     nrf_delay_ms(5);
     (void)read_reg(LIS2DH_CTRL_REG1);
@@ -385,6 +398,7 @@ void sensor_init(void)
     nrf_delay_ms(15);
 
     read_regs(LIS2DH_OUT_X_L);
+    is_sensor_active = true;
 }
 
 void gpio_on(void) {;}
@@ -393,6 +407,8 @@ void gpio_off(void) {;}
 void sensor_on(void)
 {
     nrf_drv_twi_enable(&m_twi);
+
+    is_sensor_active = false;
 
     nrf_delay_ms(50);
     write_reg(LIS2DH_CTRL_REG1, 0x97 );  // On
@@ -419,6 +435,7 @@ void sensor_on(void)
     read_regs(LIS2DH_OUT_X_L);
 
     nrf_drv_gpiote_in_event_enable(PIN_IN, true);
+    is_sensor_active = true;
 }
 
 void sensor_off(void)
@@ -426,6 +443,7 @@ void sensor_off(void)
 
 //hw_timers_stop();
 
+    is_sensor_active = false;
     nrf_drv_gpiote_in_event_disable(PIN_IN);
 
 
@@ -506,7 +524,10 @@ void timer_led_event_handler(nrf_timer_event_t event_type, void* p_context)
             }
             pt.n = (uint16_t) num_rec;
 
-            TimedCircBuffer_Add(&pt);
+            if (pt.n > 0)
+            {
+                TimedCircBuffer_Add(&pt);
+            }
 
             // Get and clear the number of reads since the last timer event
             uint32_t count = nrf_atomic_u32_fetch_store(&count_of_Accelerometer_reads, 0U);
@@ -517,7 +538,13 @@ void timer_led_event_handler(nrf_timer_event_t event_type, void* p_context)
             /* If the level is high for two consecutive ticks with no interrupts between then something
              * has halted. Trigger the mechanism.   */
             if (x) {
-                if (tick_without_interrupts) {trigger_reading();}
+                if (tick_without_interrupts)
+                {
+                    if (is_sensor_active)
+                    {
+                        trigger_reading();
+                    }
+                }
                 else
                 {
                     tick_without_interrupts = true; 

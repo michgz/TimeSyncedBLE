@@ -24,6 +24,8 @@ NRF_BLE_QWR_DEF(m_qwr_cfg);                                                     
 
 typedef unsigned char  config_value_t;
 
+static bool is_connected = false;
+
 static void nrf_qwr_error_handler(uint32_t nrf_error)
 {
     APP_ERROR_HANDLER(nrf_error);
@@ -126,8 +128,18 @@ uint16_t service_cfg_on_ble_evt(config_service_t *p_cfgs,
 
             }
             break;
+        case BLE_GAP_EVT_CONNECTED:
+            // We'll reset on the first disconnection after a non-volatile value being changed.
+            
+            is_connected = true;
+            
+            break;
+            
         case BLE_GAP_EVT_DISCONNECTED:
             // We'll reset on the first disconnection after a non-volatile value being changed.
+            
+            is_connected = false;
+            
             if (reset_on_disconnect)
             {
                 reset_on_disconnect = false;
@@ -135,6 +147,7 @@ uint16_t service_cfg_on_ble_evt(config_service_t *p_cfgs,
                 (void) sd_nvic_SystemReset();
                 while(true);
             }
+            break;
 
         default:
             ;
@@ -160,7 +173,16 @@ void fds_handler(fds_evt_t const * p_evt)
                 {
                     // A write or update has completed. Now reset to run with the new value.
 
-                    reset_on_disconnect = true;
+                    if (is_connected)
+                    {
+                        reset_on_disconnect = true;
+                    }
+                    else
+                    {
+                        (void) sd_nvic_SystemReset();
+                        while(true);
+                    }
+
                 }
             }
             break;
@@ -173,6 +195,8 @@ void fds_handler(fds_evt_t const * p_evt)
 void config_init(config_service_t * p_ctx)
 {
     ret_code_t         err_code;
+
+    is_connected = false;
 
     if (!p_ctx)
     {

@@ -123,7 +123,7 @@ void TIMER4_IRQHandler(void)
 #endif
 
 
-        //add_tt(time,NRF_TIMER4->CC[1]);
+        add_tt(time,NRF_TIMER4->CC[1]);
 #endif // 0
 
     }
